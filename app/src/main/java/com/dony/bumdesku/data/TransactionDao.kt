@@ -30,4 +30,8 @@ interface TransactionDao {
     // Mengambil semua transaksi dan mengurutkannya dari yang terbaru
     @Query("SELECT * FROM transactions ORDER BY date DESC")
     fun getAllTransactions(): Flow<List<Transaction>>
+
+    // FUNGSI BARU: Menjumlahkan semua nominal berdasarkan tipe transaksi
+    @Query("SELECT SUM(amount) FROM transactions WHERE type = :transactionType")
+    fun getTotalAmountByType(transactionType: String): Flow<Double?>
 }

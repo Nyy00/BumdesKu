@@ -29,4 +29,14 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
     suspend fun delete(transaction: Transaction) {
         transactionDao.delete(transaction)
     }
+
+    // FUNGSI BARU: Mengambil total pemasukan
+    fun getTotalIncome(): Flow<Double?> {
+        return transactionDao.getTotalAmountByType("PEMASUKAN")
+    }
+
+    // FUNGSI BARU: Mengambil total pengeluaran
+    fun getTotalExpenses(): Flow<Double?> {
+        return transactionDao.getTotalAmountByType("PENGELUARAN")
+    }
 }
