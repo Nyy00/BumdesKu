@@ -34,6 +34,8 @@ import com.dony.bumdesku.viewmodel.TransactionViewModelFactory
 import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,35 +127,111 @@ fun TransactionListScreen(
     }
 }
 
-// --- Layar Tambah Transaksi (Masih Kosong) ---
+// --- Layar Tambah Transaksi (Versi Final) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(onSave: (Transaction) -> Unit) {
+    // State untuk menampung nilai dari setiap input field
+    var description by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("") }
+    var category by remember { mutableStateOf("") }
+    val transactionTypes = listOf("PEMASUKAN", "PENGELUARAN")
+    var selectedType by remember { mutableStateOf(transactionTypes[0]) }
+    var isExpanded by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Tambah Transaksi Baru") }) }
     ) { paddingValues ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .padding(16.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Kolom input untuk Deskripsi
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Deskripsi") },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-            Text("Form untuk menambah transaksi akan ada di sini.")
-            Spacer(modifier = Modifier.height(20.dp))
-            Button(onClick = {
-                // Contoh menyimpan data dummy
-                val dummyTransaction = Transaction(
-                    amount = 50000.0,
-                    type = "PEMASUKAN",
-                    category = "Contoh",
-                    description = "Ini data coba-coba",
-                    date = System.currentTimeMillis(),
-                    unitUsahaId = 1
+            // Kolom input untuk Nominal
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it },
+                label = { Text("Nominal (Contoh: 50000)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Kolom input untuk Kategori
+            OutlinedTextField(
+                value = category,
+                onValueChange = { category = it },
+                label = { Text("Kategori (Contoh: Sewa Kursi)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Dropdown untuk memilih Jenis Transaksi
+            ExposedDropdownMenuBox(
+                expanded = isExpanded,
+                onExpandedChange = { isExpanded = !isExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedType,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Jenis Transaksi") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
-                onSave(dummyTransaction)
-                Toast.makeText(context, "Data Dummy Tersimpan!", Toast.LENGTH_SHORT).show()
-            }) {
-                Text("Simpan Data Dummy")
+                ExposedDropdownMenu(
+                    expanded = isExpanded,
+                    onDismissRequest = { isExpanded = false }
+                ) {
+                    transactionTypes.forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type) },
+                            onClick = {
+                                selectedType = type
+                                isExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f)) // Pendorong agar tombol ke bawah
+
+            // Tombol Simpan
+            Button(
+                onClick = {
+                    val amountDouble = amount.toDoubleOrNull()
+                    if (description.isNotBlank() && amountDouble != null && category.isNotBlank()) {
+                        val newTransaction = Transaction(
+                            amount = amountDouble,
+                            type = selectedType,
+                            category = category,
+                            description = description,
+                            date = System.currentTimeMillis(),
+                            unitUsahaId = 1 // Untuk sementara kita hardcode ID unit usaha
+                        )
+                        onSave(newTransaction)
+                    } else {
+                        Toast.makeText(context, "Harap isi semua kolom dengan benar", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Simpan")
             }
         }
     }
