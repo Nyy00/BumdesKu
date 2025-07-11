@@ -39,4 +39,11 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
     fun getTotalExpenses(): Flow<Double?> {
         return transactionDao.getTotalAmountByType("PENGELUARAN")
     }
+
+    // FUNGSI BARU UNTUK LAPORAN
+    suspend fun getReportData(startDate: Long, endDate: Long): Pair<Double, Double> {
+        val income = transactionDao.getAmountByTypeAndDateRange("PEMASUKAN", startDate, endDate) ?: 0.0
+        val expenses = transactionDao.getAmountByTypeAndDateRange("PENGELUARAN", startDate, endDate) ?: 0.0
+        return Pair(income, expenses)
+    }
 }

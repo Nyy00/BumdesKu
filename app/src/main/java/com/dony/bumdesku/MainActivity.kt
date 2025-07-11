@@ -12,8 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,10 +31,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.dony.bumdesku.data.BumdesDatabase
-import com.dony.bumdesku.data.DashboardData
-import com.dony.bumdesku.data.Transaction
+import com.dony.bumdesku.data.*
 import com.dony.bumdesku.repository.TransactionRepository
+import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.TransactionViewModel
 import com.dony.bumdesku.viewmodel.TransactionViewModelFactory
@@ -44,11 +42,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val factory = TransactionViewModelFactory(
-            TransactionRepository(BumdesDatabase.getDatabase(this).transactionDao())
-        )
+        val database = BumdesDatabase.getDatabase(this)
+        val transactionRepository = TransactionRepository(database.transactionDao())
+        val unitUsahaRepository = UnitUsahaRepository(database.unitUsahaDao())
+        val factory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository)
+
         setContent {
             BumdesKuTheme {
                 BumdesApp(factory = factory)
@@ -57,33 +58,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Composable utama yang mengatur navigasi
 @Composable
 fun BumdesApp(factory: TransactionViewModelFactory) {
     val navController = rememberNavController()
     val viewModel: TransactionViewModel = viewModel(factory = factory)
 
-    NavHost(navController = navController, startDestination = "transaction_list") {
+    NavHost(navController = navController, startDestination = "home") {
+        composable("home") {
+            HomeScreen(onNavigate = { route -> navController.navigate(route) })
+        }
         composable("transaction_list") {
             val transactions by viewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
-            // AMBIL DATA DASHBOARD DARI VIEWMODEL
             val dashboardData by viewModel.dashboardData.collectAsStateWithLifecycle()
-
             TransactionListScreen(
                 transactions = transactions,
-                dashboardData = dashboardData, // KIRIM DATA KE LAYAR
-                onAddClick = { navController.navigate("add_transaction") },
-                onItemClick = { transactionId ->
-                    navController.navigate("edit_transaction/$transactionId")
-                },
-                onDeleteClick = { transaction ->
-                    viewModel.delete(transaction)
+                dashboardData = dashboardData,
+                onAddItemClick = { navController.navigate("add_transaction") },
+                onItemClick = { transactionId -> navController.navigate("edit_transaction/$transactionId") },
+                onDeleteClick = { transaction -> viewModel.delete(transaction) },
+                onNavigateUp = { navController.popBackStack() },
+                onNavigateToUnitUsaha = { navController.navigate("unit_usaha_management") },
+                onNavigateToReport = {
+                    viewModel.clearReport() // Bersihkan laporan lama sebelum navigasi
+                    navController.navigate("report_screen")
                 }
             )
         }
-        // Rute untuk layar tambah transaksi
         composable("add_transaction") {
             AddTransactionScreen(
+                viewModel = viewModel,
                 onSave = { transaction ->
                     viewModel.insert(transaction)
                     navController.popBackStack()
@@ -91,20 +94,18 @@ fun BumdesApp(factory: TransactionViewModelFactory) {
                 onNavigateUp = { navController.popBackStack() }
             )
         }
-        // Rute untuk layar edit transaksi
         composable(
-            route = "edit_transaction/{transactionId}",
+            "edit_transaction/{transactionId}",
             arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
         ) { backStackEntry ->
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
             if (transactionId != null) {
-                // Ambil transaksi yang akan diedit dari ViewModel
                 val transactionToEdit by viewModel.getTransactionById(transactionId)
                     .collectAsStateWithLifecycle(initialValue = null)
-
                 transactionToEdit?.let { transaction ->
                     AddTransactionScreen(
-                        transactionToEdit = transaction, // Kirim data untuk di-edit
+                        viewModel = viewModel,
+                        transactionToEdit = transaction,
                         onSave = { updatedTransaction ->
                             viewModel.update(updatedTransaction)
                             navController.popBackStack()
@@ -114,33 +115,90 @@ fun BumdesApp(factory: TransactionViewModelFactory) {
                 }
             }
         }
+        composable("unit_usaha_management") {
+            val unitUsahaList by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+            UnitUsahaManagementScreen(
+                unitUsahaList = unitUsahaList,
+                onAddUnitUsaha = { unitName -> viewModel.insert(UnitUsaha(name = unitName)) },
+                onDeleteUnitUsaha = { unitUsaha -> viewModel.delete(unitUsaha) },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+        composable("report_screen") {
+            val reportData by viewModel.reportData.collectAsStateWithLifecycle()
+            ReportScreen(
+                reportData = reportData,
+                onGenerateReport = { startDate, endDate -> viewModel.generateReport(startDate, endDate) },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
     }
 }
 
-// --- Layar Daftar Transaksi (Dengan Dashboard) ---
+// --- Layar Daftar Transaksi ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionListScreen(
     transactions: List<Transaction>,
-    dashboardData: DashboardData, // TERIMA DATA DASHBOARD
-    onAddClick: () -> Unit,
+    dashboardData: DashboardData,
+    onAddItemClick: () -> Unit,
     onItemClick: (Int) -> Unit,
     onDeleteClick: (Transaction) -> Unit,
+    onNavigateUp: () -> Unit,
+    onNavigateToUnitUsaha: () -> Unit,
+    onNavigateToReport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Keuangan BUMDes") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Daftar Transaksi") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(Icons.Default.ArrowBack, "Kembali")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToUnitUsaha) {
+                        Icon(Icons.Default.Store, "Manajemen Unit Usaha")
+                    }
+                    IconButton(onClick = onNavigateToReport) {
+                        Icon(Icons.Default.Assessment, "Halaman Laporan")
+                    }
+                }
+            )
+        },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddClick) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah Transaksi")
+            FloatingActionButton(onClick = onAddItemClick) {
+                Icon(Icons.Default.Add, "Tambah Transaksi")
             }
         }
     ) { paddingValues ->
-        // Dialog Konfirmasi Hapus (tidak berubah)
+        // Dialog Konfirmasi Hapus... (tidak berubah)
         if (transactionToDelete != null) {
-            // ...
+            AlertDialog(
+                onDismissRequest = { transactionToDelete = null },
+                title = { Text("Konfirmasi Hapus") },
+                text = { Text("Apakah Anda yakin ingin menghapus transaksi '${transactionToDelete?.description}'?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onDeleteClick(transactionToDelete!!)
+                            transactionToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Hapus")
+                    }
+                },
+                dismissButton = {
+                    Button(onClick = { transactionToDelete = null }) {
+                        Text("Batal")
+                    }
+                }
+            )
         }
 
         Column(
@@ -152,7 +210,15 @@ fun TransactionListScreen(
             DashboardCard(data = dashboardData)
 
             if (transactions.isEmpty()) {
-                // ... (pesan kosong tidak berubah)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text("Belum ada transaksi.", style = MaterialTheme.typography.bodyLarge)
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -172,78 +238,98 @@ fun TransactionListScreen(
     }
 }
 
-// --- COMPOSABLE BARU UNTUK DASHBOARD ---
-@Composable
-fun DashboardCard(data: DashboardData) {
-    val localeID = Locale("in", "ID")
-    val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
+    // --- COMPOSABLE BARU UNTUK DASHBOARD ---
+    @Composable
+    fun DashboardCard(data: DashboardData) {
+        val localeID = Locale("in", "ID")
+        val currencyFormat =
+            NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Text("Ringkasan Keuangan", style = MaterialTheme.typography.titleLarge)
-            Divider()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Total Pemasukan:")
-                Text(
-                    text = currencyFormat.format(data.totalIncome),
-                    color = Color(0xFF008800),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Total Pengeluaran:")
-                Text(
-                    text = currencyFormat.format(data.totalExpenses),
-                    color = Color.Red,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Divider()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Saldo Akhir", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = currencyFormat.format(data.finalBalance),
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text("Ringkasan Keuangan", style = MaterialTheme.typography.titleLarge)
+                Divider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Total Pemasukan:")
+                    Text(
+                        text = currencyFormat.format(data.totalIncome),
+                        color = Color(0xFF008800),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Total Pengeluaran:")
+                    Text(
+                        text = currencyFormat.format(data.totalExpenses),
+                        color = Color.Red,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Divider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Saldo Akhir",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = currencyFormat.format(data.finalBalance),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             }
         }
     }
-}
 
 
-// --- Layar Tambah & Edit Transaksi (Versi Lengkap) ---
+// --- Layar Tambah & Edit Transaksi (Dengan Dropdown Unit Usaha) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
-    transactionToEdit: Transaction? = null, // Parameter opsional untuk mode edit
+    transactionToEdit: Transaction? = null,
     onSave: (Transaction) -> Unit,
-    onNavigateUp: () -> Unit
+    onNavigateUp: () -> Unit,
+    // Tambahkan parameter baru
+    viewModel: TransactionViewModel
 ) {
-    // State untuk menampung nilai dari setiap input field
+    // Ambil daftar unit usaha dari ViewModel
+    val unitUsahaList by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+
+    // State untuk input fields
     var description by remember { mutableStateOf(transactionToEdit?.description ?: "") }
     var amount by remember { mutableStateOf(transactionToEdit?.amount?.toString() ?: "") }
     var category by remember { mutableStateOf(transactionToEdit?.category ?: "") }
     val transactionTypes = listOf("PEMASUKAN", "PENGELUARAN")
     var selectedType by remember { mutableStateOf(transactionToEdit?.type ?: transactionTypes[0]) }
-    var isExpanded by remember { mutableStateOf(false) }
+
+    // State untuk dropdown unit usaha
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+
+    // Efek untuk memilih unit usaha yang benar saat mode edit
+    LaunchedEffect(unitUsahaList, transactionToEdit) {
+        if (transactionToEdit != null && unitUsahaList.isNotEmpty()) {
+            selectedUnitUsaha = unitUsahaList.find { it.id == transactionToEdit.unitUsahaId }
+        }
+    }
 
     val context = LocalContext.current
     val screenTitle = if (transactionToEdit == null) "Tambah Transaksi Baru" else "Edit Transaksi"
@@ -254,88 +340,88 @@ fun AddTransactionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues) // Menerapkan padding dari Scaffold
+                .padding(paddingValues)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()), // Menambahkan scroll jika layar kecil
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Kolom input untuk Deskripsi
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Deskripsi") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                // Kolom input untuk Deskripsi
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Deskripsi") },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            // Kolom input untuk Nominal
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text("Nominal (Contoh: 50000)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
+                // Kolom input untuk Nominal
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Nominal (Contoh: 50000)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            // Kolom input untuk Kategori
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Kategori (Contoh: Sewa Kursi)") },
-                modifier = Modifier.fillMaxWidth()
-            )
+                // Kolom input untuk Kategori
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Kategori (Contoh: Sewa Kursi)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
-            // Dropdown untuk memilih Jenis Transaksi
+            // --- DROPDOWN BARU UNTUK UNIT USAHA ---
             ExposedDropdownMenuBox(
-                expanded = isExpanded,
-                onExpandedChange = { isExpanded = !isExpanded }
+                expanded = isUnitUsahaExpanded,
+                onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }
             ) {
                 OutlinedTextField(
-                    value = selectedType,
+                    value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Jenis Transaksi") },
+                    label = { Text("Unit Usaha") },
                     trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded)
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded)
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor()
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
                 )
                 ExposedDropdownMenu(
-                    expanded = isExpanded,
-                    onDismissRequest = { isExpanded = false }
+                    expanded = isUnitUsahaExpanded,
+                    onDismissRequest = { isUnitUsahaExpanded = false }
                 ) {
-                    transactionTypes.forEach { type ->
+                    unitUsahaList.forEach { unit ->
                         DropdownMenuItem(
-                            text = { Text(type) },
+                            text = { Text(unit.name) },
                             onClick = {
-                                selectedType = type
-                                isExpanded = false
+                                selectedUnitUsaha = unit
+                                isUnitUsahaExpanded = false
                             }
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f)) // Pendorong agar tombol ke bawah
+            Spacer(modifier = Modifier.weight(1f))
 
-            // Tombol Simpan/Perbarui
+            // Tombol Simpan
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
-                    if (description.isNotBlank() && amountDouble != null && category.isNotBlank()) {
+                    // Pastikan unit usaha sudah dipilih
+                    if (description.isNotBlank() && amountDouble != null && category.isNotBlank() && selectedUnitUsaha != null) {
                         val transaction = Transaction(
-                            id = transactionToEdit?.id ?: 0, // Gunakan id lama jika edit
+                            id = transactionToEdit?.id ?: 0,
                             amount = amountDouble,
                             type = selectedType,
                             category = category,
                             description = description,
-                            date = transactionToEdit?.date ?: System.currentTimeMillis(), // Gunakan tanggal lama jika edit
-                            unitUsahaId = 1
+                            date = transactionToEdit?.date ?: System.currentTimeMillis(),
+                            // Gunakan ID dari unit usaha yang dipilih
+                            unitUsahaId = selectedUnitUsaha!!.id
                         )
                         onSave(transaction)
                     } else {
-                        Toast.makeText(context, "Harap isi semua kolom dengan benar", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Harap isi semua kolom, termasuk Unit Usaha", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -346,51 +432,239 @@ fun AddTransactionScreen(
     }
 }
 
-// --- Item untuk Satu Transaksi (Dengan tombol hapus) ---
+// --- COMPOSABLE BARU UNTUK MANAJEMEN UNIT USAHA ---
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionItem(
-    transaction: Transaction,
-    onItemClick: () -> Unit,
-    onDeleteClick: () -> Unit
+fun UnitUsahaManagementScreen(
+    unitUsahaList: List<UnitUsaha>,
+    onAddUnitUsaha: (String) -> Unit,
+    onDeleteUnitUsaha: (UnitUsaha) -> Unit,
+    onNavigateUp: () -> Unit
 ) {
-    // Format angka dan tanggal
-    val localeID = Locale("in", "ID")
-    val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
-    val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", localeID)
-    val formattedAmount = currencyFormat.format(transaction.amount)
-    val formattedDate = dateFormat.format(Date(transaction.date))
+    var newUnitName by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onItemClick), // Membuat card bisa diklik
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = transaction.description, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text(text = transaction.category, fontSize = 14.sp)
-                Text(text = formattedDate, fontSize = 12.sp, color = Color.Gray)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = formattedAmount,
-                color = if (transaction.type == "PEMASUKAN") Color(0xFF008800) else Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Manajemen Unit Usaha") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Kembali")
+                    }
+                }
             )
-            IconButton(onClick = onDeleteClick) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Hapus Transaksi",
-                    tint = Color.Gray
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            // Form untuk menambah unit usaha baru
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = newUnitName,
+                    onValueChange = { newUnitName = it },
+                    label = { Text("Nama Unit Usaha Baru") },
+                    modifier = Modifier.weight(1f)
                 )
+                Button(onClick = {
+                    if (newUnitName.isNotBlank()) {
+                        onAddUnitUsaha(newUnitName)
+                        newUnitName = "" // Kosongkan input field
+                    } else {
+                        Toast.makeText(context, "Nama unit tidak boleh kosong", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Daftar Unit Usaha", style = MaterialTheme.typography.titleMedium)
+            Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Daftar unit usaha yang sudah ada
+            if (unitUsahaList.isEmpty()) {
+                Text("Belum ada unit usaha.")
+            } else {
+                LazyColumn {
+                    items(unitUsahaList, key = { it.id }) { unit ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = unit.name, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onDeleteUnitUsaha(unit) }) {
+                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Gray)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
+// --- HALAMAN LAPORAN (VERSI FUNGSIONAL) ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReportScreen(
+    reportData: ReportData,
+    onGenerateReport: (Long, Long) -> Unit,
+    onNavigateUp: () -> Unit
+) {
+    val context = LocalContext.current
+    val simpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+
+    var startDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var endDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
+    val startDateState = rememberDatePickerState(initialSelectedDateMillis = startDateMillis)
+    val endDateState = rememberDatePickerState(initialSelectedDateMillis = endDateMillis)
+
+    // Update tanggal saat dipilih di DatePicker
+    LaunchedEffect(startDateState.selectedDateMillis) {
+        startDateState.selectedDateMillis?.let { startDateMillis = it }
+    }
+    LaunchedEffect(endDateState.selectedDateMillis) {
+        endDateState.selectedDateMillis?.let { endDateMillis = it }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Laporan Keuangan") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(Icons.Default.ArrowBack, "Kembali")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Pemilih Tanggal
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f)) {
+                    Text("Dari: ${simpleDateFormat.format(Date(startDateMillis))}")
+                }
+                Button(onClick = { showEndDatePicker = true }, modifier = Modifier.weight(1f)) {
+                    Text("Hingga: ${simpleDateFormat.format(Date(endDateMillis))}")
+                }
+            }
+
+            // Tombol Generate
+            Button(
+                onClick = { onGenerateReport(startDateMillis, endDateMillis + 86400000 - 1) }, // Tambah 1 hari agar inklusif
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Tampilkan Laporan")
+            }
+
+            Divider()
+
+            // Tampilkan hasil jika laporan sudah digenerate
+            if (reportData.isGenerated) {
+                DashboardCard(
+                    data = DashboardData(
+                        totalIncome = reportData.totalIncome,
+                        totalExpenses = reportData.totalExpenses,
+                        finalBalance = reportData.netProfit
+                    )
+                )
+            } else {
+                Text("Pilih rentang tanggal lalu klik 'Tampilkan Laporan'.")
+            }
+        }
+
+        // Dialog Date Picker
+        if (showStartDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showStartDatePicker = false },
+                confirmButton = {
+                    Button(onClick = { showStartDatePicker = false }) { Text("OK") }
+                }
+            ) {
+                DatePicker(state = startDateState)
+            }
+        }
+        if (showEndDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showEndDatePicker = false },
+                confirmButton = {
+                    Button(onClick = { showEndDatePicker = false }) { Text("OK") }
+                }
+            ) {
+                DatePicker(state = endDateState)
+            }
+        }
+    }
+}
+
+    // --- Item untuk Satu Transaksi (Dengan tombol hapus) ---
+    @Composable
+    fun TransactionItem(
+        transaction: Transaction,
+        onItemClick: () -> Unit,
+        onDeleteClick: () -> Unit
+    ) {
+        // Format angka dan tanggal
+        val localeID = Locale("in", "ID")
+        val currencyFormat =
+            NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
+        val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", localeID)
+        val formattedAmount = currencyFormat.format(transaction.amount)
+        val formattedDate = dateFormat.format(Date(transaction.date))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onItemClick), // Membuat card bisa diklik
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = transaction.description,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                    Text(text = transaction.category, fontSize = 14.sp)
+                    Text(text = formattedDate, fontSize = 12.sp, color = Color.Gray)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = formattedAmount,
+                    color = if (transaction.type == "PEMASUKAN") Color(0xFF008800) else Color.Red,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Hapus Transaksi",
+                        tint = Color.Gray
+                    )
+                }
+            }
+        }
+    }

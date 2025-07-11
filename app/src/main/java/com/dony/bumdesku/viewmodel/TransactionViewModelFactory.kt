@@ -3,16 +3,20 @@ package com.dony.bumdesku.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.dony.bumdesku.repository.TransactionRepository
+import com.dony.bumdesku.repository.UnitUsahaRepository // Import baru
 
-class TransactionViewModelFactory(private val repository: TransactionRepository) : ViewModelProvider.Factory {
+// Tambahkan unitUsahaRepository di constructor
+class TransactionViewModelFactory(
+    private val transactionRepository: TransactionRepository,
+    private val unitUsahaRepository: UnitUsahaRepository
+) : ViewModelProvider.Factory {
+
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        // Cek apakah class yang diminta adalah TransactionViewModel
         if (modelClass.isAssignableFrom(TransactionViewModel::class.java)) {
-            // Jika ya, buat dan kembalikan instance-nya, berikan repository
             @Suppress("UNCHECKED_CAST")
-            return TransactionViewModel(repository) as T
+            // Berikan kedua repository saat membuat ViewModel
+            return TransactionViewModel(transactionRepository, unitUsahaRepository) as T
         }
-        // Jika tidak, lemparkan error
         throw IllegalArgumentException("Unknown ViewModel class")
     }
 }

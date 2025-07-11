@@ -34,4 +34,8 @@ interface TransactionDao {
     // FUNGSI BARU: Menjumlahkan semua nominal berdasarkan tipe transaksi
     @Query("SELECT SUM(amount) FROM transactions WHERE type = :transactionType")
     fun getTotalAmountByType(transactionType: String): Flow<Double?>
+
+    // FUNGSI BARU: Menjumlahkan nominal berdasarkan tipe dan rentang tanggal
+    @Query("SELECT SUM(amount) FROM transactions WHERE type = :transactionType AND date BETWEEN :startDate AND :endDate")
+    suspend fun getAmountByTypeAndDateRange(transactionType: String, startDate: Long, endDate: Long): Double?
 }
