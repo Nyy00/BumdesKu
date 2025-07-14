@@ -23,6 +23,13 @@ import com.dony.bumdesku.viewmodel.AuthViewModel
 import com.dony.bumdesku.viewmodel.AuthViewModelFactory
 import com.dony.bumdesku.viewmodel.TransactionViewModel
 import com.dony.bumdesku.viewmodel.TransactionViewModelFactory
+import com.dony.bumdesku.data.AssetDao // import baru
+import com.dony.bumdesku.repository.AssetRepository // import baru
+import com.dony.bumdesku.viewmodel.AssetViewModel // import baru
+import com.dony.bumdesku.viewmodel.AssetViewModelFactory // import baru
+import com.dony.bumdesku.screens.AssetListScreen // import baru
+import com.dony.bumdesku.screens.AddAssetScreen // import baru
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.dony.bumdesku.viewmodel.AuthState
@@ -46,11 +53,16 @@ class MainActivity : ComponentActivity() {
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository)
         val authViewModelFactory = AuthViewModelFactory()
 
+        val assetDao = database.assetDao()
+        val assetRepository = AssetRepository(assetDao)
+        val assetViewModelFactory = AssetViewModelFactory(assetRepository)
+
         setContent {
             BumdesKuTheme {
                 BumdesApp(
                     transactionViewModelFactory = transactionViewModelFactory,
-                    authViewModelFactory = authViewModelFactory
+                    authViewModelFactory = authViewModelFactory,
+                    assetViewModelFactory = assetViewModelFactory
                 )
             }
         }
@@ -60,7 +72,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BumdesApp(
     transactionViewModelFactory: TransactionViewModelFactory,
-    authViewModelFactory: AuthViewModelFactory
+    authViewModelFactory: AuthViewModelFactory,
+    assetViewModelFactory: AssetViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -195,6 +208,29 @@ fun BumdesApp(
                 }
             }
         }
+
+        composable("asset_list") {
+            val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
+            val assets by assetViewModel.allAssets.collectAsStateWithLifecycle(emptyList())
+            AssetListScreen(
+                assets = assets,
+                onAddAssetClick = { navController.navigate("add_asset") },
+                onNavigateUp = { navController.popBackStack() },
+                onDeleteClick = { asset -> assetViewModel.delete(asset) }
+            )
+        }
+
+        composable("add_asset") {
+            val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
+            AddAssetScreen(
+                onSave = { asset ->
+                    assetViewModel.insert(asset)
+                    navController.popBackStack()
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
 
         composable("unit_usaha_management") {
             val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)

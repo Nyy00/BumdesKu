@@ -80,6 +80,20 @@ fun HomeScreen(
                     onClick = { onNavigate("unit_usaha_management") }
                 )
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Inventory, // Icon baru
+                    title = "Manajemen Aset",
+                    onClick = { onNavigate("asset_list") } // Rute baru
+                )
+                // Anda bisa menambahkan kartu lain di sini nanti
+                Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
