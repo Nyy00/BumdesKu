@@ -77,8 +77,9 @@ fun UnitUsahaManagementScreen(
             if (unitUsahaList.isEmpty()) {
                 Text("Belum ada unit usaha.")
             } else {
-                LazyColumn {
-                    items(unitUsahaList, key = { it.id }) { unit ->
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // ✅ BAGIAN YANG SUDAH DIPERBAIKI
+                    items(unitUsahaList, key = { it.localId }) { unit ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -88,6 +89,7 @@ fun UnitUsahaManagementScreen(
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Gray)
                             }
                         }
+                        Divider()
                     }
                 }
             }

@@ -1,61 +1,63 @@
 package com.dony.bumdesku.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+
+// Enum untuk merepresentasikan state dari proses otentikasi
+// PASTIKAN INI BERADA DI LUAR CLASS
+enum class AuthState {
+    IDLE,       // Keadaan awal
+    LOADING,    // Sedang dalam proses
+    SUCCESS,    // Berhasil
+    ERROR       // Terjadi kesalahan
+}
 
 class AuthViewModel : ViewModel() {
 
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = Firebase.auth
 
-    // State untuk mengetahui status login pengguna
-    private val _userLoggedIn = MutableStateFlow(auth.currentUser != null)
-    val userLoggedIn: StateFlow<Boolean> = _userLoggedIn
+    private val _authState = MutableStateFlow(AuthState.IDLE)
+    val authState: StateFlow<AuthState> = _authState
 
-    // State untuk menampilkan pesan error atau loading
-    private val _authStatus = MutableStateFlow<AuthStatus>(AuthStatus.Idle)
-    val authStatus: StateFlow<AuthStatus> = _authStatus
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
-    fun signUp(email: String, pass: String) {
-        _authStatus.value = AuthStatus.Loading
-        auth.createUserWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                _userLoggedIn.value = true
-                _authStatus.value = AuthStatus.Success("Registrasi berhasil!")
-            } else {
-                _authStatus.value = AuthStatus.Error(task.exception?.message ?: "Registrasi gagal")
+    fun registerUser(email: String, pass: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.LOADING
+            try {
+                auth.createUserWithEmailAndPassword(email, pass).await()
+                _authState.value = AuthState.SUCCESS
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+                _authState.value = AuthState.ERROR
             }
         }
     }
 
-    fun signIn(email: String, pass: String) {
-        _authStatus.value = AuthStatus.Loading
-        auth.signInWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
-            if (task.isSuccessful) {
-                _userLoggedIn.value = true
-                _authStatus.value = AuthStatus.Success("Login berhasil!")
-            } else {
-                _authStatus.value = AuthStatus.Error(task.exception?.message ?: "Login gagal")
+    fun loginUser(email: String, pass: String) {
+        viewModelScope.launch {
+            _authState.value = AuthState.LOADING
+            try {
+                auth.signInWithEmailAndPassword(email, pass).await()
+                _authState.value = AuthState.SUCCESS
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+                _authState.value = AuthState.ERROR
             }
         }
     }
 
-    fun signOut() {
-        auth.signOut()
-        _userLoggedIn.value = false
+    // Fungsi untuk mereset state setelah proses selesai
+    fun resetAuthState() {
+        _authState.value = AuthState.IDLE
+        _errorMessage.value = null
     }
-
-    // Fungsi untuk mereset status agar pesan tidak muncul terus
-    fun resetAuthStatus() {
-        _authStatus.value = AuthStatus.Idle
-    }
-}
-
-// Sealed class untuk merepresentasikan status proses otentikasi
-sealed class AuthStatus {
-    object Idle : AuthStatus()
-    object Loading : AuthStatus()
-    data class Success(val message: String) : AuthStatus()
-    data class Error(val message: String) : AuthStatus()
 }

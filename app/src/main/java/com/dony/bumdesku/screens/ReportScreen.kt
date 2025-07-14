@@ -20,12 +20,12 @@ import java.util.*
 @Composable
 fun ReportScreen(
     reportData: ReportData,
-    reportTransactions: List<Transaction>, // Tambahkan parameter ini
+    reportTransactions: List<Transaction>,
     onGenerateReport: (Long, Long) -> Unit,
     onNavigateUp: () -> Unit,
-    onItemClick: (Int) -> Unit // Tambahkan parameter ini
+    onItemClick: (Transaction) -> Unit
 ) {
-    val simpleDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val simpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
     var startDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var endDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -58,13 +58,10 @@ fun ReportScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Pemilih Tanggal
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f)) {
                     Text("Dari: ${simpleDateFormat.format(Date(startDateMillis))}")
                 }
@@ -73,20 +70,19 @@ fun ReportScreen(
                 }
             }
 
-            // Tombol Generate
             Button(
                 onClick = { onGenerateReport(startDateMillis, endDateMillis + 86400000 - 1) },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Tampilkan Laporan")
             }
 
-            Divider(modifier = Modifier.padding(vertical = 16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Tampilkan hasil jika laporan sudah digenerate
             if (reportData.isGenerated) {
-                // Tampilkan ringkasan
-                DashboardCard(
+                DashboardCard( // Pastikan DashboardCard bisa diakses
                     data = DashboardData(
                         totalIncome = reportData.totalIncome,
                         totalExpenses = reportData.totalExpenses,
@@ -94,50 +90,31 @@ fun ReportScreen(
                     )
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Detail Transaksi", style = MaterialTheme.typography.titleMedium)
-
-                // Tampilkan daftar transaksi
-                LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                    items(reportTransactions, key = { it.id }) { transaction ->
-                        TransactionItem(
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(reportTransactions, key = { it.localId }) { transaction ->
+                        TransactionItem( // Pastikan TransactionItem bisa diakses
                             transaction = transaction,
-                            onItemClick = { onItemClick(transaction.id) },
-                            onDeleteClick = { /* Tidak ada fungsi hapus di laporan */ }
+                            onItemClick = { onItemClick(transaction) },
+                            onDeleteClick = {}
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             } else {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text("Pilih rentang tanggal lalu klik 'Tampilkan Laporan'.")
-                }
+                Text("Pilih rentang tanggal lalu klik 'Tampilkan Laporan'.")
             }
         }
 
-        // Dialog Date Picker
         if (showStartDatePicker) {
             DatePickerDialog(
                 onDismissRequest = { showStartDatePicker = false },
-                confirmButton = {
-                    Button(onClick = { showStartDatePicker = false }) { Text("OK") }
-                }
-            ) {
-                DatePicker(state = startDateState)
-            }
+                confirmButton = { Button(onClick = { showStartDatePicker = false }) { Text("OK") } }
+            ) { DatePicker(state = startDateState) }
         }
         if (showEndDatePicker) {
             DatePickerDialog(
                 onDismissRequest = { showEndDatePicker = false },
-                confirmButton = {
-                    Button(onClick = { showEndDatePicker = false }) { Text("OK") }
-                }
-            ) {
-                DatePicker(state = endDateState)
-            }
+                confirmButton = { Button(onClick = { showEndDatePicker = false }) { Text("OK") } }
+            ) { DatePicker(state = endDateState) }
         }
     }
 }

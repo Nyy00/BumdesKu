@@ -21,4 +21,10 @@ interface UnitUsahaDao {
 
     @Query("SELECT * FROM unit_usaha ORDER BY name ASC")
     fun getAllUnitUsaha(): Flow<List<UnitUsaha>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(unitUsaha: List<UnitUsaha>) // Tambahkan ini
+
+    @Query("DELETE FROM unit_usaha") // Tambahkan ini
+    suspend fun deleteAll()
 }

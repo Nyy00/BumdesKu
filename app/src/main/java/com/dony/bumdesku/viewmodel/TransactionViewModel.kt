@@ -18,6 +18,7 @@ class TransactionViewModel(
 
     // --- Logika Transaksi & Dashboard ---
     val allTransactions: Flow<List<Transaction>> = transactionRepository.allTransactions
+
     val dashboardData: StateFlow<DashboardData> = combine(
         transactionRepository.getTotalIncome(),
         transactionRepository.getTotalExpenses()
@@ -33,10 +34,18 @@ class TransactionViewModel(
     )
 
     fun getTransactionById(id: Int): Flow<Transaction?> = transactionRepository.getTransactionById(id)
-    fun insert(transaction: Transaction) = viewModelScope.launch { transactionRepository.insert(transaction) }
-    fun update(transaction: Transaction) = viewModelScope.launch { transactionRepository.update(transaction) }
-    fun delete(transaction: Transaction) = viewModelScope.launch { transactionRepository.delete(transaction) }
 
+    fun insert(transaction: Transaction) = viewModelScope.launch {
+        transactionRepository.insert(transaction)
+    }
+
+    fun update(transaction: Transaction) = viewModelScope.launch {
+        transactionRepository.update(transaction)
+    }
+
+    fun delete(transaction: Transaction) = viewModelScope.launch {
+        transactionRepository.delete(transaction)
+    }
 
     // --- Logika Unit Usaha ---
     val allUnitUsaha: Flow<List<UnitUsaha>> = unitUsahaRepository.allUnitUsaha
@@ -44,47 +53,35 @@ class TransactionViewModel(
     fun insert(unitUsaha: UnitUsaha) = viewModelScope.launch {
         unitUsahaRepository.insert(unitUsaha)
     }
+
     fun update(unitUsaha: UnitUsaha) = viewModelScope.launch {
         unitUsahaRepository.update(unitUsaha)
     }
+
     fun delete(unitUsaha: UnitUsaha) = viewModelScope.launch {
         unitUsahaRepository.delete(unitUsaha)
     }
 
-    // --- LOGIKA LAPORAN YANG DIPERBARUI ---
+    // --- LOGIKA LAPORAN ---
 
-    // State untuk menyimpan hasil kalkulasi laporan
     private val _reportData = MutableStateFlow(ReportData())
     val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
 
-    // State BARU untuk menyimpan daftar transaksi laporan
-    private val _reportTransactions = MutableStateFlow<List<Transaction>>(emptyList())
-    val reportTransactions: StateFlow<List<Transaction>> = _reportTransactions.asStateFlow()
-
-
-    // Fungsi yang dipanggil UI untuk membuat laporan
     fun generateReport(startDate: Long, endDate: Long) {
         viewModelScope.launch {
-            // Ambil data kalkulasi
             val (income, expenses) = transactionRepository.getReportData(startDate, endDate)
             _reportData.value = ReportData(
                 totalIncome = income,
                 totalExpenses = expenses,
                 netProfit = income - expenses,
-                isGenerated = true
+                isGenerated = true,
+                startDate = startDate, // Simpan tanggal untuk filtering
+                endDate = endDate     // Simpan tanggal untuk filtering
             )
-
-            // Ambil daftar transaksi untuk periode yang sama dan update StateFlow
-            transactionRepository.getTransactionsByDateRange(startDate, endDate)
-                .collect { transactions ->
-                    _reportTransactions.value = transactions
-                }
         }
     }
 
-    // Fungsi untuk mereset laporan saat halaman ditutup/dibuka kembali
     fun clearReport() {
         _reportData.value = ReportData()
-        _reportTransactions.value = emptyList() // Reset juga daftar transaksinya
     }
 }

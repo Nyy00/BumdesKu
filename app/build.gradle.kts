@@ -106,4 +106,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
 
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Firebase BOM (wajib ada)
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+
+    // Pastikan baris ini ada
+    implementation("com.google.firebase:firebase-firestore")
 }

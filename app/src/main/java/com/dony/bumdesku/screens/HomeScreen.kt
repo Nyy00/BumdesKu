@@ -4,10 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.FormatListBulleted
-import androidx.compose.material.icons.filled.Store
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,22 +13,24 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.Logout
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    onLogoutClick: () -> Unit // Tambahkan parameter ini
+    onLogout: () -> Unit // Parameter baru ditambahkan di sini
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("BUMDesKu Menu Utama") },
-                // Tambahkan blok actions untuk tombol logout
                 actions = {
-                    IconButton(onClick = onLogoutClick) {
-                        Icon(imageVector = Icons.Default.Logout, contentDescription = "Logout")
+                    // Tombol Logout ditambahkan di sini
+                    IconButton(onClick = onLogout) {
+                        Icon(
+                            imageVector = Icons.Default.Logout,
+                            contentDescription = "Logout"
+                        )
                     }
                 }
             )

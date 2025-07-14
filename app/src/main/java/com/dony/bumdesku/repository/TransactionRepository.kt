@@ -2,12 +2,26 @@ package com.dony.bumdesku.repository
 
 import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.TransactionDao
+import com.dony.bumdesku.data.UnitUsahaDao
 import kotlinx.coroutines.flow.Flow
 
-class TransactionRepository(private val transactionDao: TransactionDao) {
+class TransactionRepository(
+    private val transactionDao: TransactionDao,
+    private val unitUsahaDao: UnitUsahaDao // Meskipun tidak digunakan di sini, tetap dibutuhkan untuk factory
+) {
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
 
+    // --- FUNGSI UNTUK DASHBOARD ---
+    fun getTotalIncome(): Flow<Double?> {
+        return transactionDao.getTotalAmountByType("PEMASUKAN")
+    }
+
+    fun getTotalExpenses(): Flow<Double?> {
+        return transactionDao.getTotalAmountByType("PENGELUARAN")
+    }
+
+    // --- FUNGSI UNTUK CRUD ---
     fun getTransactionById(id: Int): Flow<Transaction?> {
         return transactionDao.getTransactionById(id)
     }
@@ -24,16 +38,7 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
         transactionDao.delete(transaction)
     }
 
-    // --- FUNGSI BARU UNTUK DASHBOARD & LAPORAN ---
-
-    fun getTotalIncome(): Flow<Double?> {
-        return transactionDao.getTotalAmountByType("PEMASUKAN")
-    }
-
-    fun getTotalExpenses(): Flow<Double?> {
-        return transactionDao.getTotalAmountByType("PENGELUARAN")
-    }
-
+    // --- FUNGSI UNTUK LAPORAN ---
     suspend fun getReportData(startDate: Long, endDate: Long): Pair<Double, Double> {
         val income = transactionDao.getAmountByTypeAndDateRange("PEMASUKAN", startDate, endDate) ?: 0.0
         val expenses = transactionDao.getAmountByTypeAndDateRange("PENGELUARAN", startDate, endDate) ?: 0.0

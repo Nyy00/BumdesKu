@@ -4,9 +4,9 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -18,27 +18,39 @@ import com.dony.bumdesku.data.BumdesDatabase
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
-import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
-import com.dony.bumdesku.viewmodel.*
+import com.dony.bumdesku.viewmodel.AuthViewModel
+import com.dony.bumdesku.viewmodel.AuthViewModelFactory
+import com.dony.bumdesku.viewmodel.TransactionViewModel
+import com.dony.bumdesku.viewmodel.TransactionViewModelFactory
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
+import com.dony.bumdesku.viewmodel.AuthState
+
+// Import semua screen Anda dari package 'screens'
+import com.dony.bumdesku.screens.*
+
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Factory untuk TransactionViewModel
-        val transactionDb = BumdesDatabase.getDatabase(this)
-        val transactionRepo = TransactionRepository(transactionDb.transactionDao())
-        val unitUsahaRepo = UnitUsahaRepository(transactionDb.unitUsahaDao())
-        val transactionFactory = TransactionViewModelFactory(transactionRepo, unitUsahaRepo)
+        val database = BumdesDatabase.getDatabase(this)
 
-        // Factory untuk AuthViewModel
-        val authFactory = AuthViewModelFactory()
+        val transactionDao = database.transactionDao()
+        val unitUsahaDao = database.unitUsahaDao()
+
+        val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao)
+        val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
+
+        val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository)
+        val authViewModelFactory = AuthViewModelFactory()
 
         setContent {
             BumdesKuTheme {
                 BumdesApp(
-                    transactionViewModelFactory = transactionFactory,
-                    authViewModelFactory = authFactory
+                    transactionViewModelFactory = transactionViewModelFactory,
+                    authViewModelFactory = authViewModelFactory
                 )
             }
         }
@@ -51,62 +63,95 @@ fun BumdesApp(
     authViewModelFactory: AuthViewModelFactory
 ) {
     val navController = rememberNavController()
-    val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-    val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+    val auth = Firebase.auth
+    val context = LocalContext.current
 
-    val isLoggedIn by authViewModel.userLoggedIn.collectAsStateWithLifecycle()
-    val authStatus by authViewModel.authStatus.collectAsStateWithLifecycle()
-
-    // Menampilkan pesan Toast untuk status login/register
-    LaunchedEffect(authStatus) {
-        when (val status = authStatus) {
-            is AuthStatus.Success -> Toast.makeText(navController.context, status.message, Toast.LENGTH_SHORT).show()
-            is AuthStatus.Error -> Toast.makeText(navController.context, status.message, Toast.LENGTH_SHORT).show()
-            else -> {}
-        }
-        if (authStatus !is AuthStatus.Idle) {
-            authViewModel.resetAuthStatus()
-        }
-    }
-
-    // Tentukan halaman awal berdasarkan status login
-    val startDestination = if (isLoggedIn) "home" else "login"
+    val startDestination = if (auth.currentUser != null) "home" else "login"
 
     NavHost(navController = navController, startDestination = startDestination) {
-        // --- RUTE OTENTIKASI ---
         composable("login") {
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val authState by authViewModel.authState.collectAsStateWithLifecycle()
+            val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
+
             LoginScreen(
-                onLoginClick = { email, pass -> authViewModel.signIn(email, pass) },
+                authState = authState,
+                onLoginClick = { email, password ->
+                    authViewModel.loginUser(email, password)
+                },
                 onNavigateToRegister = { navController.navigate("register") }
             )
-        }
-        composable("register") {
-            RegisterScreen(
-                onRegisterClick = { email, pass -> authViewModel.signUp(email, pass) },
-                onNavigateToLogin = { navController.navigate("login") }
-            )
+
+            LaunchedEffect(authState) {
+                when (authState) {
+                    AuthState.SUCCESS -> {
+                        navController.navigate("home") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                        authViewModel.resetAuthState()
+                    }
+                    AuthState.ERROR -> {
+                        Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT).show()
+                        authViewModel.resetAuthState()
+                    }
+                    else -> {}
+                }
+            }
         }
 
-        // --- RUTE APLIKASI UTAMA ---
+        composable("register") {
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val authState by authViewModel.authState.collectAsStateWithLifecycle()
+            val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
+
+            RegisterScreen(
+                authState = authState,
+                onRegisterClick = { email, password ->
+                    authViewModel.registerUser(email, password)
+                },
+                onNavigateToLogin = { navController.popBackStack() }
+            )
+
+            LaunchedEffect(authState) {
+                when (authState) {
+                    AuthState.SUCCESS -> {
+                        Toast.makeText(context, "Registrasi berhasil, silakan login", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack()
+                        authViewModel.resetAuthState()
+                    }
+                    AuthState.ERROR -> {
+                        Toast.makeText(context, errorMessage ?: "Registrasi Gagal", Toast.LENGTH_SHORT).show()
+                        authViewModel.resetAuthState()
+                    }
+                    else -> {}
+                }
+            }
+        }
+
         composable("home") {
             HomeScreen(
                 onNavigate = { route -> navController.navigate(route) },
-                onLogoutClick = {
-                    authViewModel.signOut()
+                onLogout = {
+                    auth.signOut()
                     navController.navigate("login") {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                        popUpTo("home") { inclusive = true }
                     }
                 }
             )
         }
+
         composable("transaction_list") {
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
             val dashboardData by transactionViewModel.dashboardData.collectAsStateWithLifecycle()
+
             TransactionListScreen(
                 transactions = transactions,
                 dashboardData = dashboardData,
                 onAddItemClick = { navController.navigate("add_transaction") },
-                onItemClick = { transactionId -> navController.navigate("edit_transaction/$transactionId") },
+                onItemClick = { transaction ->
+                    navController.navigate("edit_transaction/${transaction.localId}")
+                },
                 onDeleteClick = { transaction -> transactionViewModel.delete(transaction) },
                 onNavigateUp = { navController.popBackStack() },
                 onNavigateToUnitUsaha = { navController.navigate("unit_usaha_management") },
@@ -116,7 +161,9 @@ fun BumdesApp(
                 }
             )
         }
+
         composable("add_transaction") {
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             AddTransactionScreen(
                 viewModel = transactionViewModel,
                 onSave = { transaction ->
@@ -126,10 +173,12 @@ fun BumdesApp(
                 onNavigateUp = { navController.popBackStack() }
             )
         }
+
         composable(
             "edit_transaction/{transactionId}",
             arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
         ) { backStackEntry ->
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
             if (transactionId != null) {
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
@@ -140,14 +189,15 @@ fun BumdesApp(
                         transactionToEdit = transaction,
                         onSave = { updatedTransaction ->
                             transactionViewModel.update(updatedTransaction)
-                            navController.popBackStack()
                         },
                         onNavigateUp = { navController.popBackStack() }
                     )
                 }
             }
         }
+
         composable("unit_usaha_management") {
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
             UnitUsahaManagementScreen(
                 unitUsahaList = unitUsahaList,
@@ -156,15 +206,22 @@ fun BumdesApp(
                 onNavigateUp = { navController.popBackStack() }
             )
         }
+
         composable("report_screen") {
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val allTransactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
             val reportData by transactionViewModel.reportData.collectAsStateWithLifecycle()
-            val reportTransactions by transactionViewModel.reportTransactions.collectAsStateWithLifecycle()
+
             ReportScreen(
                 reportData = reportData,
-                reportTransactions = reportTransactions,
-                onGenerateReport = { startDate, endDate -> transactionViewModel.generateReport(startDate, endDate) },
+                reportTransactions = allTransactions.filter { it.date >= reportData.startDate && it.date <= reportData.endDate },
+                onGenerateReport = { startDate, endDate ->
+                    transactionViewModel.generateReport(startDate, endDate)
+                },
                 onNavigateUp = { navController.popBackStack() },
-                onItemClick = { transactionId -> navController.navigate("edit_transaction/$transactionId") }
+                onItemClick = { transaction ->
+                    navController.navigate("edit_transaction/${transaction.localId}")
+                }
             )
         }
     }
