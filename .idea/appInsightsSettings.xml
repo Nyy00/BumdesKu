@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.dony.bumdesku" />
+                  <option name="mobileSdkAppId" value="1:836541635785:android:d747f4dbc7a8d3899c4118" />
+                  <option name="projectId" value="bumdesku-50b2d" />
+                  <option name="projectNumber" value="836541635785" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

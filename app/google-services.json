@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "836541635785",
+    "project_id": "bumdesku-50b2d",
+    "storage_bucket": "bumdesku-50b2d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836541635785:android:d747f4dbc7a8d3899c4118",
+        "android_client_info": {
+          "package_name": "com.dony.bumdesku"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "836541635785-qocin87l5qa00ai99m4irdbib45julqq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dony.bumdesku",
+            "certificate_hash": "41dce2ccd1c0617a3fa200616f2ed2a5df43bd47"
+          }
+        },
+        {
+          "client_id": "836541635785-nubt5dtjlldso6nlj2474ppn9dj8c7ci.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPtPdDPfz_5sUXaRUddlKAL8ghbwSyyEA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "836541635785-nubt5dtjlldso6nlj2474ppn9dj8c7ci.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

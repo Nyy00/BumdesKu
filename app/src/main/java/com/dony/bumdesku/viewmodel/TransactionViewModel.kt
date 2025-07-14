@@ -3,7 +3,7 @@ package com.dony.bumdesku.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.DashboardData
-import com.dony.bumdesku.data.ReportData // Import baru
+import com.dony.bumdesku.data.ReportData
 import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.repository.TransactionRepository
@@ -51,27 +51,40 @@ class TransactionViewModel(
         unitUsahaRepository.delete(unitUsaha)
     }
 
-    // --- LOGIKA BARU UNTUK LAPORAN ---
+    // --- LOGIKA LAPORAN YANG DIPERBARUI ---
 
-    // State untuk menyimpan hasil laporan
+    // State untuk menyimpan hasil kalkulasi laporan
     private val _reportData = MutableStateFlow(ReportData())
     val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
+
+    // State BARU untuk menyimpan daftar transaksi laporan
+    private val _reportTransactions = MutableStateFlow<List<Transaction>>(emptyList())
+    val reportTransactions: StateFlow<List<Transaction>> = _reportTransactions.asStateFlow()
+
 
     // Fungsi yang dipanggil UI untuk membuat laporan
     fun generateReport(startDate: Long, endDate: Long) {
         viewModelScope.launch {
+            // Ambil data kalkulasi
             val (income, expenses) = transactionRepository.getReportData(startDate, endDate)
             _reportData.value = ReportData(
                 totalIncome = income,
                 totalExpenses = expenses,
                 netProfit = income - expenses,
-                isGenerated = true // Tandai bahwa laporan sudah dibuat
+                isGenerated = true
             )
+
+            // Ambil daftar transaksi untuk periode yang sama dan update StateFlow
+            transactionRepository.getTransactionsByDateRange(startDate, endDate)
+                .collect { transactions ->
+                    _reportTransactions.value = transactions
+                }
         }
     }
 
     // Fungsi untuk mereset laporan saat halaman ditutup/dibuka kembali
     fun clearReport() {
         _reportData.value = ReportData()
+        _reportTransactions.value = emptyList() // Reset juga daftar transaksinya
     }
 }

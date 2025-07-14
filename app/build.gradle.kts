@@ -1,7 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("com.google.devtools.ksp") version "1.9.23-1.0.19"
+    id("com.google.devtools.ksp") version "2.0.0-1.0.21"
+    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -39,7 +41,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.11"
+        kotlinCompilerExtensionVersion = "1.5.12"
     }
 }
 
@@ -54,6 +56,10 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose.android)
+    implementation(libs.firebase.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -61,6 +67,10 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
+
+    implementation("com.google.firebase:firebase-analytics")
 
     // Material Design (untuk komponen UI yang modern)
     implementation("com.google.android.material:material:1.12.0")
