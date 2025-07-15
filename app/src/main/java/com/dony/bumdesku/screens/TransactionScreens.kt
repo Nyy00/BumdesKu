@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -22,6 +23,8 @@ import com.dony.bumdesku.data.DashboardData
 import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.viewmodel.TransactionViewModel
+import com.dony.bumdesku.viewmodel.ChartData
+import com.dony.bumdesku.screens.MonthlyBarChart
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,6 +34,7 @@ fun TransactionListScreen(
     onAddItemClick: () -> Unit,
     onItemClick: (Transaction) -> Unit, // Diubah menjadi (Transaction)
     onDeleteClick: (Transaction) -> Unit,
+    chartData: ChartData,
     onNavigateUp: () -> Unit,
     onNavigateToUnitUsaha: () -> Unit,
     onNavigateToReport: () -> Unit,
@@ -88,26 +92,38 @@ fun TransactionListScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            // 1. Tampilkan Dashboard Card seperti biasa
             DashboardCard(data = dashboardData)
+
+            // 2. Panggil dan tampilkan Grafik di sini
+            MonthlyBarChart(chartData = chartData) // Pastikan chartData sudah ditambahkan sebagai parameter di TransactionListScreen
+
+            // 3. Tampilkan daftar transaksi di bawahnya
             if (transactions.isEmpty()) {
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth() // Gunakan fillMaxWidth agar tidak menutupi komponen di atasnya
+                        .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text("Belum ada transaksi.", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
+                // Teks header untuk daftar transaksi
+                Text(
+                    text = "Riwayat Transaksi",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp)
+                )
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(), // LazyColumn akan mengisi sisa ruang
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Kunci menggunakan localId yang unik
                     items(transactions, key = { it.localId }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            // Kirim seluruh objek transaksi
                             onItemClick = { onItemClick(transaction) },
                             onDeleteClick = { transactionToDelete = transaction }
                         )
@@ -132,6 +148,7 @@ fun AddTransactionScreen(
     var amount by remember { mutableStateOf(transactionToEdit?.amount?.takeIf { it > 0 }?.toString() ?: "") }
     var category by remember { mutableStateOf(transactionToEdit?.category ?: "") }
     val transactionTypes = listOf("PEMASUKAN", "PENGELUARAN")
+    // State untuk tipe transaksi yang dipilih
     var selectedType by remember { mutableStateOf(transactionToEdit?.type ?: transactionTypes[0]) }
 
     var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
@@ -183,6 +200,27 @@ fun AddTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // --- ✅ KODE BARU UNTUK PILIHAN PEMASUKAN/PENGELUARAN ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                transactionTypes.forEach { text ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { selectedType = text }
+                    ) {
+                        RadioButton(
+                            selected = (text == selectedType),
+                            onClick = { selectedType = text }
+                        )
+                        Text(text = text, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+            }
+            // --------------------------------------------------------
+
             ExposedDropdownMenuBox(
                 expanded = isUnitUsahaExpanded,
                 onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }
@@ -221,9 +259,9 @@ fun AddTransactionScreen(
                     if (description.isNotBlank() && amountDouble != null && category.isNotBlank() && selectedUnitUsaha != null) {
                         val newTransaction = Transaction(
                             localId = transactionToEdit?.localId ?: 0,
-                            id = transactionToEdit?.id ?: "", // Diperbaiki, defaultnya string kosong
+                            id = transactionToEdit?.id ?: "",
                             amount = amountDouble,
-                            type = selectedType,
+                            type = selectedType, // Gunakan state yang dipilih
                             category = category,
                             description = description,
                             date = transactionToEdit?.date ?: System.currentTimeMillis(),

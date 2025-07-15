@@ -46,20 +46,56 @@ android {
 }
 
 dependencies {
-
+    // KTX & Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.1")
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
+
+    // Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Navigation
     implementation(libs.androidx.navigation.compose.android)
-    implementation(libs.firebase.auth)
+    implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
+    implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
+
+    // Firebase (BOM mengelola versi)
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-storage")
+
+    // Room Database
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+
+    // Dependensi Lain
+    implementation("com.google.android.material:material:1.12.0")
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
+    // ✅ HANYA PERLU SATU DEPENDENSI INI UNTUK GRAFIK
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -67,51 +103,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-    implementation(platform("com.google.firebase:firebase-bom:33.16.0"))
-
-    implementation("com.google.firebase:firebase-analytics")
-
-    // Material Design (untuk komponen UI yang modern)
-    implementation("com.google.android.material:material:1.12.0")
-
-    // Architectural Components - Penting untuk struktur aplikasi yang baik (MVVM)
-    val lifecycleVersion = "2.8.1"
-    // ViewModel: Untuk menyimpan dan mengelola data terkait UI
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycleVersion")
-    // LiveData: Untuk membuat data yang bisa "diamati" oleh UI
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycleVersion")
-
-    // Room Database: Untuk penyimpanan data lokal
-    val roomVersion = "2.6.1"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    // Annotation processor untuk Room
-    ksp("androidx.room:room-compiler:$roomVersion")
-    // Dukungan Kotlin Coroutines untuk Room
-    implementation("androidx.room:room-ktx:$roomVersion")
-
-    // Navigation Component: Untuk mengelola alur perpindahan antar layar/fragment
-    val navVersion = "2.7.7"
-    implementation("androidx.navigation:navigation-fragment-ktx:$navVersion")
-    implementation("androidx.navigation:navigation-ui-ktx:$navVersion")
-
-    // Kotlin Coroutines (untuk proses background)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
-
-    // Lifecycle-aware collector for Compose
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.1")
-
-    // Integration with Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.1")
-
-    implementation("androidx.compose.material:material-icons-extended")
-
-    // Firebase BOM (wajib ada)
-    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-
-    // Pastikan baris ini ada
-    implementation("com.google.firebase:firebase-firestore")
-
-    implementation("com.google.firebase:firebase-storage")
 }

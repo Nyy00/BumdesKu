@@ -21,4 +21,10 @@ interface AssetDao {
     @Query("SELECT * FROM assets WHERE localId = :id")
     fun getAssetById(id: Int): Flow<Asset?>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(assets: List<Asset>)
+
+    @Query("DELETE FROM assets")
+    suspend fun deleteAll()
+
 }

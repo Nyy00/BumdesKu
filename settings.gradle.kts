@@ -16,9 +16,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // ✅ TAMBAHKAN BARIS INI DI SINI
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
 rootProject.name = "BumdesKu"
 include(":app")
- 

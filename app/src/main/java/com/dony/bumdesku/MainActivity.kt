@@ -157,10 +157,12 @@ fun BumdesApp(
             val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
             val dashboardData by transactionViewModel.dashboardData.collectAsStateWithLifecycle()
+            val chartData by transactionViewModel.chartData.collectAsStateWithLifecycle() // <-- Ambil data grafik
 
             TransactionListScreen(
                 transactions = transactions,
                 dashboardData = dashboardData,
+                chartData = chartData, // <-- Berikan data ke layar
                 onAddItemClick = { navController.navigate("add_transaction") },
                 onItemClick = { transaction ->
                     navController.navigate("edit_transaction/${transaction.localId}")
@@ -223,10 +225,8 @@ fun BumdesApp(
         composable("add_asset") {
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
             AddAssetScreen(
-                onSave = { asset ->
-                    assetViewModel.insert(asset)
-                    navController.popBackStack()
-                },
+                viewModel = assetViewModel,
+                onSaveComplete = { navController.popBackStack() },
                 onNavigateUp = { navController.popBackStack() }
             )
         }
