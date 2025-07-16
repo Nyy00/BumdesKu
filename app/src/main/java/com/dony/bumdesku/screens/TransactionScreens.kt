@@ -31,6 +31,7 @@ import com.dony.bumdesku.screens.MonthlyBarChart
 fun TransactionListScreen(
     transactions: List<Transaction>,
     dashboardData: DashboardData,
+    userRole: String,
     onAddItemClick: () -> Unit,
     onItemClick: (Transaction) -> Unit, // Diubah menjadi (Transaction)
     onDeleteClick: (Transaction) -> Unit,
@@ -62,8 +63,12 @@ fun TransactionListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddItemClick) {
-                Icon(Icons.Default.Add, "Tambah Transaksi")
+            // LOGIKA UNTUK MENGETAHUI PERAN PENGGUNA
+            // Hanya tampilkan tombol tambah jika perannya "pengurus"
+            if (userRole == "pengurus") {
+                FloatingActionButton(onClick = onAddItemClick) {
+                    Icon(Icons.Default.Add, "Tambah Transaksi")
+                }
             }
         }
     ) { paddingValues ->
@@ -124,8 +129,9 @@ fun TransactionListScreen(
                     items(transactions, key = { it.localId }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            onItemClick = { onItemClick(transaction) },
-                            onDeleteClick = { transactionToDelete = transaction }
+                            userRole = userRole, // <-- Kirimkan peran ke TransactionItem
+                            onItemClick = { if (userRole == "pengurus") onItemClick(transaction) },
+                            onDeleteClick = { if (userRole == "pengurus") transactionToDelete = transaction }
                         )
                     }
                 }

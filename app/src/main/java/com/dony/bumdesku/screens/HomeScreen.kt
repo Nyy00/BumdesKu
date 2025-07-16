@@ -18,7 +18,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    onLogout: () -> Unit // Parameter baru ditambahkan di sini
+    onLogout: () -> Unit,
+    userRole: String
 ) {
     Scaffold(
         topBar = {
@@ -26,7 +27,7 @@ fun HomeScreen(
                 title = { Text("BUMDesKu Menu Utama") },
                 actions = {
                     // Tombol Logout ditambahkan di sini
-                    IconButton(onClick = onLogout) {
+                    IconButton(onClick = onLogout) { // Sekarang tidak akan error
                         Icon(
                             imageVector = Icons.Default.Logout,
                             contentDescription = "Logout"
@@ -44,7 +45,28 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Baris pertama fitur
+            // ✅ Hanya tampilkan menu ini untuk "pengurus"
+            if (userRole == "pengurus") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.AddCircle,
+                        title = "Tambah Transaksi",
+                        onClick = { onNavigate("add_transaction") }
+                    )
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Inventory,
+                        title = "Manajemen Aset",
+                        onClick = { onNavigate("asset_list") }
+                    )
+                }
+            }
+
+            // Menu ini bisa dilihat oleh semua peran
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -57,41 +79,21 @@ fun HomeScreen(
                 )
                 FeatureCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AddCircle,
-                    title = "Tambah Transaksi",
-                    onClick = { onNavigate("add_transaction") }
-                )
-            }
-            // Baris kedua fitur
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
                     icon = Icons.Default.Assessment,
                     title = "Laporan",
                     onClick = { onNavigate("report_screen") }
                 )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
                 FeatureCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Store,
                     title = "Unit Usaha",
                     onClick = { onNavigate("unit_usaha_management") }
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Inventory, // Icon baru
-                    title = "Manajemen Aset",
-                    onClick = { onNavigate("asset_list") } // Rute baru
-                )
-                // Anda bisa menambahkan kartu lain di sini nanti
                 Spacer(modifier = Modifier.weight(1f))
             }
         }

@@ -82,6 +82,7 @@ fun DashboardCard(data: DashboardData) {
 fun TransactionItem(
     transaction: Transaction,
     onItemClick: () -> Unit,
+    userRole: String,
     onDeleteClick: () -> Unit
 ) {
     val localeID = Locale("in", "ID")
@@ -119,12 +120,14 @@ fun TransactionItem(
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp
             )
-            IconButton(onClick = onDeleteClick) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Hapus Transaksi",
-                    tint = Color.Gray
-                )
+            if (userRole == "pengurus") {
+                IconButton(onClick = onDeleteClick) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Hapus Transaksi",
+                        tint = Color.Gray
+                    )
+                }
             }
         }
     }

@@ -21,6 +21,7 @@ import java.util.*
 fun ReportScreen(
     reportData: ReportData,
     reportTransactions: List<Transaction>,
+    userRole: String, // ✅ Tambahkan parameter ini
     onGenerateReport: (Long, Long) -> Unit,
     onNavigateUp: () -> Unit,
     onItemClick: (Transaction) -> Unit
@@ -82,7 +83,7 @@ fun ReportScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             if (reportData.isGenerated) {
-                DashboardCard( // Pastikan DashboardCard bisa diakses
+                DashboardCard(
                     data = DashboardData(
                         totalIncome = reportData.totalIncome,
                         totalExpenses = reportData.totalExpenses,
@@ -92,10 +93,11 @@ fun ReportScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(reportTransactions, key = { it.localId }) { transaction ->
-                        TransactionItem( // Pastikan TransactionItem bisa diakses
+                        TransactionItem(
                             transaction = transaction,
-                            onItemClick = { onItemClick(transaction) },
-                            onDeleteClick = {}
+                            userRole = userRole, // ✅ Kirimkan peran ke TransactionItem
+                            onItemClick = { if (userRole == "pengurus") onItemClick(transaction) },
+                            onDeleteClick = {} // Di halaman laporan tidak ada fungsi hapus
                         )
                     }
                 }

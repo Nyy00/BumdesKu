@@ -14,29 +14,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.dony.bumdesku.data.Asset
 import com.dony.bumdesku.data.BumdesDatabase
 import com.dony.bumdesku.data.UnitUsaha
+import com.dony.bumdesku.repository.AssetRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
+import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
-import com.dony.bumdesku.viewmodel.AuthViewModel
-import com.dony.bumdesku.viewmodel.AuthViewModelFactory
-import com.dony.bumdesku.viewmodel.TransactionViewModel
-import com.dony.bumdesku.viewmodel.TransactionViewModelFactory
-import com.dony.bumdesku.data.AssetDao // import baru
-import com.dony.bumdesku.repository.AssetRepository // import baru
-import com.dony.bumdesku.viewmodel.AssetViewModel // import baru
-import com.dony.bumdesku.viewmodel.AssetViewModelFactory // import baru
-import com.dony.bumdesku.screens.AssetListScreen // import baru
-import com.dony.bumdesku.screens.AddAssetScreen // import baru
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
-import com.dony.bumdesku.viewmodel.AuthState
-
-// Import semua screen Anda dari package 'screens'
-import com.dony.bumdesku.screens.*
-
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -44,17 +32,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val database = BumdesDatabase.getDatabase(this)
 
+        // Inisialisasi semua DAO
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
+        val assetDao = database.assetDao()
 
+        // Inisialisasi semua Repository
         val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
+        val assetRepository = AssetRepository(assetDao)
 
+        // Inisialisasi semua ViewModelFactory
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository)
         val authViewModelFactory = AuthViewModelFactory()
-
-        val assetDao = database.assetDao()
-        val assetRepository = AssetRepository(assetDao)
         val assetViewModelFactory = AssetViewModelFactory(assetRepository)
 
         setContent {
@@ -103,10 +93,13 @@ fun BumdesApp(
                         }
                         authViewModel.resetAuthState()
                     }
+
                     AuthState.ERROR -> {
-                        Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT)
+                            .show()
                         authViewModel.resetAuthState()
                     }
+
                     else -> {}
                 }
             }
@@ -128,24 +121,38 @@ fun BumdesApp(
             LaunchedEffect(authState) {
                 when (authState) {
                     AuthState.SUCCESS -> {
-                        Toast.makeText(context, "Registrasi berhasil, silakan login", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            "Registrasi berhasil, silakan login",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         navController.popBackStack()
                         authViewModel.resetAuthState()
                     }
+
                     AuthState.ERROR -> {
-                        Toast.makeText(context, errorMessage ?: "Registrasi Gagal", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context,
+                            errorMessage ?: "Registrasi Gagal",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         authViewModel.resetAuthState()
                     }
+
                     else -> {}
                 }
             }
         }
 
         composable("home") {
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+
             HomeScreen(
+                userRole = userProfile?.role ?: "pengurus", // <-- Kirim peran
                 onNavigate = { route -> navController.navigate(route) },
                 onLogout = {
-                    auth.signOut()
+                    authViewModel.logout()
                     navController.navigate("login") {
                         popUpTo("home") { inclusive = true }
                     }
@@ -153,16 +160,24 @@ fun BumdesApp(
             )
         }
 
+        // ✅ INI VERSI YANG BENAR DAN LENGKAP (yang duplikat sudah dihapus)
         composable("transaction_list") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+
+            val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(
+                emptyList()
+            )
             val dashboardData by transactionViewModel.dashboardData.collectAsStateWithLifecycle()
-            val chartData by transactionViewModel.chartData.collectAsStateWithLifecycle() // <-- Ambil data grafik
+            val chartData by transactionViewModel.chartData.collectAsStateWithLifecycle()
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
 
             TransactionListScreen(
                 transactions = transactions,
                 dashboardData = dashboardData,
-                chartData = chartData, // <-- Berikan data ke layar
+                chartData = chartData,
+                userRole = userProfile?.role ?: "pengurus",
                 onAddItemClick = { navController.navigate("add_transaction") },
                 onItemClick = { transaction ->
                     navController.navigate("edit_transaction/${transaction.localId}")
@@ -178,7 +193,8 @@ fun BumdesApp(
         }
 
         composable("add_transaction") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
             AddTransactionScreen(
                 viewModel = transactionViewModel,
                 onSave = { transaction ->
@@ -193,17 +209,19 @@ fun BumdesApp(
             "edit_transaction/{transactionId}",
             arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
         ) { backStackEntry ->
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
             if (transactionId != null) {
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
-                    .collectAsStateWithLifecycle(initialValue = null)
+                    .collectAsStateWithLifecycle(null)
                 transactionToEdit?.let { transaction ->
                     AddTransactionScreen(
                         viewModel = transactionViewModel,
                         transactionToEdit = transaction,
                         onSave = { updatedTransaction ->
                             transactionViewModel.update(updatedTransaction)
+                            navController.popBackStack()
                         },
                         onNavigateUp = { navController.popBackStack() }
                     )
@@ -231,10 +249,12 @@ fun BumdesApp(
             )
         }
 
-
         composable("unit_usaha_management") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
+            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(
+                emptyList()
+            )
             UnitUsahaManagementScreen(
                 unitUsahaList = unitUsahaList,
                 onAddUnitUsaha = { unitName -> transactionViewModel.insert(UnitUsaha(name = unitName)) },
@@ -244,13 +264,21 @@ fun BumdesApp(
         }
 
         composable("report_screen") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val allTransactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(emptyList())
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
+            val authViewModel: AuthViewModel =
+                viewModel(factory = authViewModelFactory) // <-- Ambil AuthViewModel
+
+            val allTransactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(
+                emptyList()
+            )
             val reportData by transactionViewModel.reportData.collectAsStateWithLifecycle()
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle() // <-- Ambil profil pengguna
 
             ReportScreen(
                 reportData = reportData,
                 reportTransactions = allTransactions.filter { it.date >= reportData.startDate && it.date <= reportData.endDate },
+                userRole = userProfile?.role ?: "pengurus", // ✅ Berikan peran pengguna
                 onGenerateReport = { startDate, endDate ->
                     transactionViewModel.generateReport(startDate, endDate)
                 },
