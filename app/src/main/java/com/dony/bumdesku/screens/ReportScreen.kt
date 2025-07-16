@@ -10,6 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.filled.PictureAsPdf
+import com.dony.bumdesku.PdfExporter
 import com.dony.bumdesku.data.DashboardData
 import com.dony.bumdesku.data.ReportData
 import com.dony.bumdesku.data.Transaction
@@ -26,6 +29,7 @@ fun ReportScreen(
     onNavigateUp: () -> Unit,
     onItemClick: (Transaction) -> Unit
 ) {
+    val context = LocalContext.current
     val simpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
     var startDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -50,6 +54,18 @@ fun ReportScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(Icons.Default.ArrowBack, "Kembali")
+                    }
+                },
+                // ✅ Tambahkan actions di sini
+                actions = {
+                    IconButton(onClick = {
+                        // Panggil fungsi ekspor dengan data yang ada
+                        PdfExporter.createReportPdf(context, reportData, reportTransactions)
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = "Ekspor ke PDF"
+                        )
                     }
                 }
             )
