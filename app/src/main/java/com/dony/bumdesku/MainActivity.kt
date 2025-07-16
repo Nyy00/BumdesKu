@@ -162,22 +162,23 @@ fun BumdesApp(
 
         // ✅ INI VERSI YANG BENAR DAN LENGKAP (yang duplikat sudah dihapus)
         composable("transaction_list") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
-            val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(
-                emptyList()
-            )
+            // Ambil data yang dibutuhkan, termasuk searchQuery
+            val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle()
             val dashboardData by transactionViewModel.dashboardData.collectAsStateWithLifecycle()
             val chartData by transactionViewModel.chartData.collectAsStateWithLifecycle()
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val searchQuery by transactionViewModel.searchQuery.collectAsStateWithLifecycle()
 
             TransactionListScreen(
                 transactions = transactions,
                 dashboardData = dashboardData,
                 chartData = chartData,
                 userRole = userProfile?.role ?: "pengurus",
+                searchQuery = searchQuery, // <-- Kirim query
+                onSearchQueryChange = transactionViewModel::onSearchQueryChange, // <-- Kirim aksi
                 onAddItemClick = { navController.navigate("add_transaction") },
                 onItemClick = { transaction ->
                     navController.navigate("edit_transaction/${transaction.localId}")

@@ -8,6 +8,7 @@ import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,32 +16,56 @@ import java.util.Calendar
 import java.util.LinkedHashMap
 import java.util.UUID
 
-// Data class ChartData tidak perlu diubah
 data class ChartData(
     val monthlyIncome: Map<String, Float> = emptyMap(),
     val monthlyExpenses: Map<String, Float> = emptyMap()
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TransactionViewModel(
     private val transactionRepository: TransactionRepository,
     private val unitUsahaRepository: UnitUsahaRepository,
 ) : ViewModel() {
 
-    // --- StateFlow lain tidak perlu diubah ---
-    val allTransactions: Flow<List<Transaction>> = transactionRepository.allTransactions
-    val dashboardData: StateFlow<DashboardData> = combine(
-        transactionRepository.getTotalIncome(),
-        transactionRepository.getTotalExpenses()
-    ) { income, expenses ->
-        val totalIncome = income ?: 0.0
-        val totalExpenses = expenses ?: 0.0
-        val finalBalance = totalIncome - totalExpenses
-        DashboardData(totalIncome, totalExpenses, finalBalance)
+    // --- MANAJEMEN PENCARIAN ---
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun onSearchQueryChange(newQuery: String) {
+        _searchQuery.value = newQuery
+    }
+
+    // ✅ PENGGABUNGAN allTransactions DENGAN LOGIKA PENCARIAN
+    val allTransactions: StateFlow<List<Transaction>> = _searchQuery
+        .flatMapLatest { query ->
+            transactionRepository.allTransactions.map { list ->
+                if (query.isBlank()) {
+                    list
+                } else {
+                    list.filter {
+                        it.description.contains(query, ignoreCase = true) ||
+                                it.category.contains(query, ignoreCase = true)
+                    }
+                }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // --- DASHBOARD & GRAFIK (SEKARANG MENGGUNAKAN `allTransactions` YANG SUDAH BISA DIFILTER) ---
+    val dashboardData: StateFlow<DashboardData> = allTransactions.map { transactions ->
+        val totalIncome = transactions.filter { it.type == "PEMASUKAN" }.sumOf { it.amount }
+        val totalExpenses = transactions.filter { it.type == "PENGELUARAN" }.sumOf { it.amount }
+        DashboardData(totalIncome, totalExpenses, totalIncome - totalExpenses)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = DashboardData()
     )
+
     val chartData: StateFlow<ChartData> = allTransactions.map { transactions ->
         val calendar = Calendar.getInstance()
         val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des")
@@ -67,13 +92,8 @@ class TransactionViewModel(
         initialValue = ChartData()
     )
 
-    fun insert(unitUsaha: UnitUsaha) = viewModelScope.launch {
-        // Buat salinan objek dan berikan ID unik sebelum disimpan
-        val newUnitUsaha = unitUsaha.copy(id = UUID.randomUUID().toString())
-        unitUsahaRepository.insert(newUnitUsaha)
-    }
 
-    // --- LOGIKA LAPORAN YANG DIPERBAIKI SECARA TOTAL ---
+    // --- SISA VIEWMODEL LAINNYA (TIDAK BERUBAH) ---
     private val _reportData = MutableStateFlow(ReportData())
     val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
 
@@ -96,7 +116,6 @@ class TransactionViewModel(
                 unitUsahaName = unitUsaha?.name ?: "Semua Unit Usaha",
                 unitUsahaId = unitUsaha?.id
             )
-
             transactionRepository.getFilteredTransactions(startDate, endDate, unitUsaha?.id)
                 .collect { filteredList ->
                     _filteredReportTransactions.value = filteredList
@@ -114,7 +133,12 @@ class TransactionViewModel(
     fun insert(transaction: Transaction) = viewModelScope.launch { transactionRepository.insert(transaction) }
     fun update(transaction: Transaction) = viewModelScope.launch { transactionRepository.update(transaction) }
     fun delete(transaction: Transaction) = viewModelScope.launch { transactionRepository.delete(transaction) }
+
     val allUnitUsaha: Flow<List<UnitUsaha>> = unitUsahaRepository.allUnitUsaha
+    fun insert(unitUsaha: UnitUsaha) = viewModelScope.launch {
+        val newUnitUsaha = unitUsaha.copy(id = UUID.randomUUID().toString())
+        unitUsahaRepository.insert(newUnitUsaha)
+    }
     fun update(unitUsaha: UnitUsaha) = viewModelScope.launch { unitUsahaRepository.update(unitUsaha) }
     fun delete(unitUsaha: UnitUsaha) = viewModelScope.launch { unitUsahaRepository.delete(unitUsaha) }
 }

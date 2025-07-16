@@ -9,6 +9,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,41 +33,76 @@ import com.dony.bumdesku.screens.MonthlyBarChart
 fun TransactionListScreen(
     transactions: List<Transaction>,
     dashboardData: DashboardData,
-    userRole: String,
-    onAddItemClick: () -> Unit,
-    onItemClick: (Transaction) -> Unit, // Diubah menjadi (Transaction)
-    onDeleteClick: (Transaction) -> Unit,
     chartData: ChartData,
+    userRole: String,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onAddItemClick: () -> Unit,
+    onItemClick: (Transaction) -> Unit,
+    onDeleteClick: (Transaction) -> Unit,
     onNavigateUp: () -> Unit,
     onNavigateToUnitUsaha: () -> Unit,
     onNavigateToReport: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var transactionToDelete by remember { mutableStateOf<Transaction?>(null) }
+    var isSearchActive by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Daftar Transaksi") },
+                title = {
+                    if (isSearchActive) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = onSearchQueryChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Cari deskripsi atau kategori...") },
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(onClick = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        onSearchQueryChange("")
+                                    } else {
+                                        isSearchActive = false
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Close, "Hapus atau Tutup")
+                                }
+                            }
+                        )
+                    } else {
+                        Text("Daftar Transaksi")
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.Default.ArrowBack, "Kembali")
+                    if (isSearchActive) {
+                        IconButton(onClick = { isSearchActive = false }) {
+                            Icon(Icons.Default.ArrowBack, "Tutup Pencarian")
+                        }
+                    } else {
+                        IconButton(onClick = onNavigateUp) {
+                            Icon(Icons.Default.ArrowBack, "Kembali")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToUnitUsaha) {
-                        Icon(Icons.Default.Store, "Manajemen Unit Usaha")
-                    }
-                    IconButton(onClick = onNavigateToReport) {
-                        Icon(Icons.Default.Assessment, "Halaman Laporan")
+                    if (!isSearchActive) {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, "Cari")
+                        }
+                        IconButton(onClick = onNavigateToUnitUsaha) {
+                            Icon(Icons.Default.Store, "Manajemen Unit Usaha")
+                        }
+                        IconButton(onClick = onNavigateToReport) {
+                            Icon(Icons.Default.Assessment, "Halaman Laporan")
+                        }
                     }
                 }
             )
         },
         floatingActionButton = {
-            // LOGIKA UNTUK MENGETAHUI PERAN PENGGUNA
-            // Hanya tampilkan tombol tambah jika perannya "pengurus"
-            if (userRole == "pengurus") {
+            if (userRole == "pengurus" && !isSearchActive) {
                 FloatingActionButton(onClick = onAddItemClick) {
                     Icon(Icons.Default.Add, "Tambah Transaksi")
                 }
@@ -92,44 +129,36 @@ fun TransactionListScreen(
             )
         }
 
+        // Konten utama
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 1. Tampilkan Dashboard Card seperti biasa
-            DashboardCard(data = dashboardData)
+            // Tampilkan Dashboard Card dan Grafik hanya jika tidak sedang mencari
+            if (!isSearchActive) {
+                DashboardCard(data = dashboardData)
+                MonthlyBarChart(chartData = chartData)
+            }
 
-            // 2. Panggil dan tampilkan Grafik di sini
-            MonthlyBarChart(chartData = chartData) // Pastikan chartData sudah ditambahkan sebagai parameter di TransactionListScreen
-
-            // 3. Tampilkan daftar transaksi di bawahnya
             if (transactions.isEmpty()) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth() // Gunakan fillMaxWidth agar tidak menutupi komponen di atasnya
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text("Belum ada transaksi.", style = MaterialTheme.typography.bodyLarge)
+                    Text(if (searchQuery.isNotEmpty()) "Transaksi tidak ditemukan." else "Belum ada transaksi.", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
-                // Teks header untuk daftar transaksi
-                Text(
-                    text = "Riwayat Transaksi",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp)
-                )
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(), // LazyColumn akan mengisi sisa ruang
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(transactions, key = { it.localId }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            userRole = userRole, // <-- Kirimkan peran ke TransactionItem
+                            userRole = userRole,
                             onItemClick = { if (userRole == "pengurus") onItemClick(transaction) },
                             onDeleteClick = { if (userRole == "pengurus") transactionToDelete = transaction }
                         )
