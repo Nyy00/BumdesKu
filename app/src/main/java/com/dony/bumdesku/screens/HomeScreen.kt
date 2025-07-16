@@ -18,19 +18,17 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    onLogout: () -> Unit,
-    userRole: String
+    userRole: String // ✅ Tambahkan kembali parameter ini
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("BUMDesKu Menu Utama") },
                 actions = {
-                    // Tombol Logout ditambahkan di sini
-                    IconButton(onClick = onLogout) { // Sekarang tidak akan error
+                    IconButton(onClick = { onNavigate("profile") }) {
                         Icon(
-                            imageVector = Icons.Default.Logout,
-                            contentDescription = "Logout"
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = "Profil"
                         )
                     }
                 }
@@ -45,7 +43,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ✅ Hanya tampilkan menu ini untuk "pengurus"
+            // Menu yang hanya bisa dilihat oleh PENGURUS
             if (userRole == "pengurus") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -66,7 +64,7 @@ fun HomeScreen(
                 }
             }
 
-            // Menu ini bisa dilihat oleh semua peran
+            // Menu yang bisa dilihat oleh SEMUA PERAN
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)

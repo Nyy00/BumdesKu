@@ -94,6 +94,22 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun changePassword(onResult: (Boolean, String) -> Unit) {
+        val email = auth.currentUser?.email
+        if (email != null) {
+            auth.sendPasswordResetEmail(email)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        onResult(true, "Link untuk ubah password telah dikirim ke email Anda.")
+                    } else {
+                        onResult(false, task.exception?.message ?: "Gagal mengirim link.")
+                    }
+                }
+        } else {
+            onResult(false, "Tidak ada pengguna yang login.")
+        }
+    }
+
     fun logout() {
         auth.signOut()
         _userProfile.value = null

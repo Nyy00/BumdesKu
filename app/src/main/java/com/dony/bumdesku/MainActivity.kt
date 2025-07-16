@@ -9,6 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -145,16 +146,39 @@ fun BumdesApp(
         }
 
         composable("home") {
+            // Ambil ViewModel dan profil pengguna
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
 
             HomeScreen(
-                userRole = userProfile?.role ?: "pengurus", // <-- Kirim peran
-                onNavigate = { route -> navController.navigate(route) },
-                onLogout = {
+                // ✅ Berikan nilai untuk userRole
+                userRole = userProfile?.role ?: "pengurus",
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+
+
+        composable("profile") {
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val localContext = LocalContext.current
+
+            ProfileScreen(
+                userProfile = userProfile,
+                onNavigateUp = { navController.popBackStack() },
+                onChangePasswordClick = {
+                    authViewModel.changePassword { success, message ->
+                        Toast.makeText(localContext, message, Toast.LENGTH_LONG).show()
+                    }
+                },
+                // ✅ Tambahkan aksi untuk tombol logout baru
+                onLogoutClick = {
                     authViewModel.logout()
                     navController.navigate("login") {
-                        popUpTo("home") { inclusive = true }
+                        // Hapus semua halaman sebelumnya dari back stack
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
                     }
                 }
             )
