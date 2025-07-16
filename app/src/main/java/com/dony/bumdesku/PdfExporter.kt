@@ -23,7 +23,7 @@ object PdfExporter {
     fun createReportPdf(
         context: Context,
         reportData: ReportData,
-        transactions: List<Transaction>
+        transactions: List<Transaction> // Daftar transaksi yang sudah difilter
     ) {
         val pageHeight = 1120
         val pagewidth = 792
@@ -39,6 +39,11 @@ object PdfExporter {
             isFakeBoldText = true
         }
 
+        val subtitlePaint = Paint().apply { // Paint baru untuk subjudul
+            color = Color.DKGRAY
+            textSize = 16f
+        }
+
         val headerPaint = Paint().apply {
             color = Color.BLACK
             textSize = 15f
@@ -52,13 +57,21 @@ object PdfExporter {
 
         // --- Menggambar konten PDF ---
         var yPosition = 60f
+        val localeID = Locale("in", "ID")
 
-        // Judul
+        // Judul Laporan
         canvas.drawText("Laporan Keuangan BUMDes", 40f, yPosition, titlePaint)
+        yPosition += 25f
+        // ✅ Subjudul dengan nama Unit Usaha dari ReportData
+        canvas.drawText(reportData.unitUsahaName, 40f, yPosition, subtitlePaint)
+        yPosition += 15f
+        // Rentang Tanggal
+        val dateFormatPeriod = SimpleDateFormat("dd MMM yyyy", localeID)
+        val periodText = "${dateFormatPeriod.format(Date(reportData.startDate))} - ${dateFormatPeriod.format(Date(reportData.endDate))}"
+        canvas.drawText(periodText, 40f, yPosition, textPaint)
         yPosition += 40f
 
         // Ringkasan
-        val localeID = Locale("in", "ID")
         val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
         canvas.drawText("Total Pemasukan: ${currencyFormat.format(reportData.totalIncome)}", 40f, yPosition, textPaint)
         yPosition += 25f
@@ -72,19 +85,16 @@ object PdfExporter {
         canvas.drawText("Deskripsi", 120f, yPosition, headerPaint)
         canvas.drawText("Pemasukan", 450f, yPosition, headerPaint)
         canvas.drawText("Pengeluaran", 600f, yPosition, headerPaint)
-        yPosition += 25f
-
-        // Garis pemisah
-        canvas.drawLine(40f, yPosition - 20, pagewidth - 40f, yPosition - 20, headerPaint)
-        canvas.drawLine(40f, yPosition, pagewidth - 40f, yPosition, headerPaint)
         yPosition += 10f
 
+        // Garis pemisah
+        canvas.drawLine(40f, yPosition, pagewidth - 40f, yPosition, headerPaint)
+        yPosition += 20f
 
         // Isi Tabel (daftar transaksi)
-        val dateFormat = SimpleDateFormat("dd-MM-yy", localeID)
+        val dateFormatTable = SimpleDateFormat("dd-MM-yy", localeID)
         for (tx in transactions) {
-            yPosition += 20f
-            canvas.drawText(dateFormat.format(Date(tx.date)), 40f, yPosition, textPaint)
+            canvas.drawText(dateFormatTable.format(Date(tx.date)), 40f, yPosition, textPaint)
             canvas.drawText(tx.description, 120f, yPosition, textPaint)
 
             if (tx.type == "PEMASUKAN") {
@@ -92,12 +102,10 @@ object PdfExporter {
             } else {
                 canvas.drawText(currencyFormat.format(tx.amount), 600f, yPosition, textPaint)
             }
+            yPosition += 25f
         }
 
-        // Selesaikan halaman PDF
         pdfDocument.finishPage(page)
-
-        // Simpan file PDF
         savePdfToFile(context, pdfDocument)
     }
 
@@ -107,7 +115,6 @@ object PdfExporter {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Untuk Android 10 dan ke atas (Scoped Storage)
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
@@ -122,7 +129,7 @@ object PdfExporter {
                     }
                 }
             } else {
-                // Untuk Android 9 dan ke bawah
+                @Suppress("DEPRECATION")
                 val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName)
                 FileOutputStream(file).use {
                     pdfDocument.writeTo(it)

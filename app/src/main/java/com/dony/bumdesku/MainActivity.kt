@@ -264,28 +264,27 @@ fun BumdesApp(
         }
 
         composable("report_screen") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
-            val authViewModel: AuthViewModel =
-                viewModel(factory = authViewModelFactory) // <-- Ambil AuthViewModel
+            // Ambil ViewModel yang dibutuhkan
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
-            val allTransactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(
-                emptyList()
-            )
+            // Ambil semua state yang relevan dari ViewModel
             val reportData by transactionViewModel.reportData.collectAsStateWithLifecycle()
-            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle() // <-- Ambil profil pengguna
+            // ✅ Ambil daftar transaksi dari StateFlow yang BARU dan REAKTIF
+            val reportTransactions by transactionViewModel.filteredReportTransactions.collectAsStateWithLifecycle()
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
 
             ReportScreen(
                 reportData = reportData,
-                reportTransactions = allTransactions.filter { it.date >= reportData.startDate && it.date <= reportData.endDate },
-                userRole = userProfile?.role ?: "pengurus", // ✅ Berikan peran pengguna
-                onGenerateReport = { startDate, endDate ->
-                    transactionViewModel.generateReport(startDate, endDate)
+                unitUsahaList = unitUsahaList,
+                userRole = userProfile?.role ?: "pengurus",
+                // ✅ Berikan daftar transaksi yang sudah jadi, TANPA perlu filter manual di sini
+                reportTransactions = reportTransactions,
+                onGenerateReport = { startDate, endDate, unitUsaha ->
+                    transactionViewModel.generateReport(startDate, endDate, unitUsaha)
                 },
-                onNavigateUp = { navController.popBackStack() },
-                onItemClick = { transaction ->
-                    navController.navigate("edit_transaction/${transaction.localId}")
-                }
+                onNavigateUp = { navController.popBackStack() }
             )
         }
     }

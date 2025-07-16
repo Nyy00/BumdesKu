@@ -5,17 +5,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.ui.unit.dp
 import com.dony.bumdesku.PdfExporter
 import com.dony.bumdesku.data.DashboardData
 import com.dony.bumdesku.data.ReportData
 import com.dony.bumdesku.data.Transaction
+import com.dony.bumdesku.data.UnitUsaha
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -24,10 +25,11 @@ import java.util.*
 fun ReportScreen(
     reportData: ReportData,
     reportTransactions: List<Transaction>,
-    userRole: String, // ✅ Tambahkan parameter ini
-    onGenerateReport: (Long, Long) -> Unit,
-    onNavigateUp: () -> Unit,
-    onItemClick: (Transaction) -> Unit
+    unitUsahaList: List<UnitUsaha>, // <-- Tambahkan parameter ini
+    userRole: String,
+    onGenerateReport: (Long, Long, UnitUsaha?) -> Unit, // <-- Ubah parameter ini
+    onNavigateUp: () -> Unit
+    // onItemClick kita hapus karena tidak digunakan di sini
 ) {
     val context = LocalContext.current
     val simpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
@@ -39,6 +41,11 @@ fun ReportScreen(
 
     val startDateState = rememberDatePickerState(initialSelectedDateMillis = startDateMillis)
     val endDateState = rememberDatePickerState(initialSelectedDateMillis = endDateMillis)
+
+    // State untuk dropdown filter
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+
 
     LaunchedEffect(startDateState.selectedDateMillis) {
         startDateState.selectedDateMillis?.let { startDateMillis = it }
@@ -56,10 +63,8 @@ fun ReportScreen(
                         Icon(Icons.Default.ArrowBack, "Kembali")
                     }
                 },
-                // ✅ Tambahkan actions di sini
                 actions = {
                     IconButton(onClick = {
-                        // Panggil fungsi ekspor dengan data yang ada
                         PdfExporter.createReportPdf(context, reportData, reportTransactions)
                     }) {
                         Icon(
@@ -78,6 +83,7 @@ fun ReportScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Pemilih Tanggal
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { showStartDatePicker = true }, modifier = Modifier.weight(1f)) {
                     Text("Dari: ${simpleDateFormat.format(Date(startDateMillis))}")
@@ -87,9 +93,47 @@ fun ReportScreen(
                 }
             }
 
+            // Dropdown Filter Unit Usaha
+            ExposedDropdownMenuBox(
+                expanded = isUnitUsahaExpanded,
+                onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded },
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                OutlinedTextField(
+                    value = selectedUnitUsaha?.name ?: "Semua Unit Usaha",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Filter Unit Usaha") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = isUnitUsahaExpanded,
+                    onDismissRequest = { isUnitUsahaExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Semua Unit Usaha") },
+                        onClick = {
+                            selectedUnitUsaha = null
+                            isUnitUsahaExpanded = false
+                        }
+                    )
+                    unitUsahaList.forEach { unit ->
+                        DropdownMenuItem(
+                            text = { Text(unit.name) },
+                            onClick = {
+                                selectedUnitUsaha = unit
+                                isUnitUsahaExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Tombol Generate Laporan
             Button(
-                onClick = { onGenerateReport(startDateMillis, endDateMillis + 86400000 - 1) },
-                modifier = Modifier.fillMaxWidth()
+                onClick = { onGenerateReport(startDateMillis, endDateMillis + 86400000 - 1, selectedUnitUsaha) },
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
             ) {
                 Text("Tampilkan Laporan")
             }
@@ -98,6 +142,7 @@ fun ReportScreen(
             Divider()
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Tampilan Hasil Laporan
             if (reportData.isGenerated) {
                 DashboardCard(
                     data = DashboardData(
@@ -111,17 +156,18 @@ fun ReportScreen(
                     items(reportTransactions, key = { it.localId }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            userRole = userRole, // ✅ Kirimkan peran ke TransactionItem
-                            onItemClick = { if (userRole == "pengurus") onItemClick(transaction) },
-                            onDeleteClick = {} // Di halaman laporan tidak ada fungsi hapus
+                            userRole = userRole,
+                            onItemClick = { /* Tidak ada aksi klik di laporan */ },
+                            onDeleteClick = {}
                         )
                     }
                 }
             } else {
-                Text("Pilih rentang tanggal lalu klik 'Tampilkan Laporan'.")
+                Text("Pilih rentang tanggal dan filter, lalu klik 'Tampilkan Laporan'.")
             }
         }
 
+        // Dialog Date Picker
         if (showStartDatePicker) {
             DatePickerDialog(
                 onDismissRequest = { showStartDatePicker = false },

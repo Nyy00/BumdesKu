@@ -31,4 +31,12 @@ interface TransactionDao {
     // Fungsi ini untuk mengambil daftar transaksi dalam rentang tanggal
     @Query("SELECT * FROM transactions WHERE date BETWEEN :startDate AND :endDate ORDER BY date DESC")
     fun getTransactionsByDateRange(startDate: Long, endDate: Long): Flow<List<Transaction>>
+
+    // Mengambil total berdasarkan tipe, rentang tanggal, DAN unit usaha
+    @Query("SELECT SUM(amount) FROM transactions WHERE type = :transactionType AND unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate")
+    suspend fun getAmountByTypeDateAndUnit(transactionType: String, unitUsahaId: String, startDate: Long, endDate: Long): Double?
+
+    // Mengambil daftar transaksi berdasarkan rentang tanggal DAN unit usaha
+    @Query("SELECT * FROM transactions WHERE unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate ORDER BY date DESC")
+    fun getTransactionsByDateAndUnit(unitUsahaId: String, startDate: Long, endDate: Long): Flow<List<Transaction>>
 }

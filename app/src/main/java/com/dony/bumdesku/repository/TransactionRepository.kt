@@ -39,10 +39,29 @@ class TransactionRepository(
     }
 
     // --- FUNGSI UNTUK LAPORAN ---
-    suspend fun getReportData(startDate: Long, endDate: Long): Pair<Double, Double> {
-        val income = transactionDao.getAmountByTypeAndDateRange("PEMASUKAN", startDate, endDate) ?: 0.0
-        val expenses = transactionDao.getAmountByTypeAndDateRange("PENGELUARAN", startDate, endDate) ?: 0.0
+    suspend fun getReportData(startDate: Long, endDate: Long, unitUsahaId: String?): Pair<Double, Double> {
+        val income: Double
+        val expenses: Double
+
+        if (unitUsahaId == null) {
+            // Jika tidak ada unit usaha dipilih, ambil semua data
+            income = transactionDao.getAmountByTypeAndDateRange("PEMASUKAN", startDate, endDate) ?: 0.0
+            expenses = transactionDao.getAmountByTypeAndDateRange("PENGELUARAN", startDate, endDate) ?: 0.0
+        } else {
+            // Jika ada unit usaha dipilih, gunakan query yang baru
+            income = transactionDao.getAmountByTypeDateAndUnit("PEMASUKAN", unitUsahaId, startDate, endDate) ?: 0.0
+            expenses = transactionDao.getAmountByTypeDateAndUnit("PENGELUARAN", unitUsahaId, startDate, endDate) ?: 0.0
+        }
         return Pair(income, expenses)
+    }
+
+    // Tambahkan fungsi baru untuk mengambil transaksi yang difilter
+    fun getFilteredTransactions(startDate: Long, endDate: Long, unitUsahaId: String?): Flow<List<Transaction>> {
+        return if (unitUsahaId == null) {
+            transactionDao.getTransactionsByDateRange(startDate, endDate)
+        } else {
+            transactionDao.getTransactionsByDateAndUnit(unitUsahaId, startDate, endDate)
+        }
     }
 
     fun getTransactionsByDateRange(startDate: Long, endDate: Long): Flow<List<Transaction>> {

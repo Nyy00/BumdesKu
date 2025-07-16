@@ -27,8 +27,8 @@ fun MonthlyBarChart(chartData: ChartData) {
         return
     }
 
-    // Menggunakan LinkedHashMap akan menjaga urutan bulan tetap benar
-    val allMonths = chartData.monthlyIncome.keys.union(chartData.monthlyExpenses.keys).toList()
+    // ✅ Mengambil daftar bulan dari salah satu map (karena keduanya memiliki kunci yang sama dan terurut)
+    val allMonths = chartData.monthlyIncome.keys.toList()
 
     Card(
         modifier = Modifier
@@ -47,13 +47,11 @@ fun MonthlyBarChart(chartData: ChartData) {
                         axisRight.isEnabled = false
                         setDrawGridBackground(false)
 
-                        // Konfigurasi Sumbu X
                         xAxis.apply {
                             position = XAxis.XAxisPosition.BOTTOM
                             setDrawGridLines(false)
                             granularity = 1f
                             isGranularityEnabled = true
-                            // ✅ PENTING: Pusatkan label di antara grup bar
                             setCenterAxisLabels(true)
                             valueFormatter = IndexAxisValueFormatter(allMonths)
                         }
@@ -80,20 +78,16 @@ fun MonthlyBarChart(chartData: ChartData) {
                     }
 
                     val barData = BarData(incomeDataSet, expenseDataSet)
-                    barChart.data = barData
-
-                    // ✅ KONFIGURASI PENTING UNTUK MENAMPILKAN DUA BAR
                     val groupSpace = 0.3f
                     val barSpace = 0.05f
-                    val barWidth = 0.3f // (barWidth + barSpace) * 2 + groupSpace = 1.0
+                    val barWidth = 0.3f
                     barData.barWidth = barWidth
+
+                    barChart.data = barData
                     barChart.xAxis.axisMinimum = 0f
-                    // Atur sumbu X agar muat untuk semua grup bar
                     barChart.xAxis.axisMaximum = allMonths.size.toFloat()
                     barChart.groupBars(0f, groupSpace, barSpace)
-                    // ----------------------------------------------------
-
-                    barChart.invalidate() // Refresh chart
+                    barChart.invalidate()
                 }
             )
         }
