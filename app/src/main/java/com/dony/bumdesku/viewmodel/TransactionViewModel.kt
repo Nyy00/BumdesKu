@@ -136,6 +136,42 @@ class TransactionViewModel(
         initialValue = NeracaData()
     )
 
+    // ✅ --- LOGIKA BARU UNTUK NERACA SALDO ---
+    val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, _allAccounts) { transactions, accounts ->
+        // Buat daftar kosong untuk menampung hasil
+        val saldoItems = mutableListOf<NeracaSaldoItem>()
+
+        // Untuk setiap akun yang ada di Chart of Accounts...
+        for (account in accounts) {
+            // Hitung total semua transaksi di mana akun ini ada di sisi DEBIT
+            val totalDebit = transactions
+                .filter { it.debitAccountId == account.id }
+                .sumOf { it.amount }
+
+            // Hitung total semua transaksi di mana akun ini ada di sisi KREDIT
+            val totalKredit = transactions
+                .filter { it.creditAccountId == account.id }
+                .sumOf { it.amount }
+
+            // Tambahkan ke daftar HANYA jika ada transaksi
+            if (totalDebit > 0 || totalKredit > 0) {
+                saldoItems.add(
+                    NeracaSaldoItem(
+                        accountNumber = account.accountNumber,
+                        accountName = account.accountName,
+                        totalDebit = totalDebit,
+                        totalKredit = totalKredit
+                    )
+                )
+            }
+        }
+        saldoItems // Kembalikan daftar yang sudah diisi
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     //--- BUKU PEMBANTU ---
     fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
         return allTransactions.map { transactions ->

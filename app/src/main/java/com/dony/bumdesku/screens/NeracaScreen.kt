@@ -1,5 +1,6 @@
 package com.dony.bumdesku.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,7 +21,8 @@ import java.util.*
 @Composable
 fun NeracaScreen(
     neracaData: NeracaData,
-    onNavigateUp: () -> Unit
+    onNavigateUp: () -> Unit,
+    onAccountClick: (NeracaItem) -> Unit // ✅ Tambahkan parameter aksi klik
 ) {
     val localeID = Locale("in", "ID")
     val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
@@ -33,7 +35,6 @@ fun NeracaScreen(
             )
         }
     ) { paddingValues ->
-        // Gunakan LazyColumn agar bisa di-scroll
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -45,8 +46,13 @@ fun NeracaScreen(
                 Text("ASET", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Divider(modifier = Modifier.padding(vertical = 4.dp))
             }
-            items(neracaData.asetItems) { item ->
-                NeracaRowItem(label = item.accountName, value = item.balance, format = currencyFormat)
+            items(neracaData.asetItems, key = { it.accountName }) { item ->
+                NeracaRowItem(
+                    label = item.accountName,
+                    value = item.balance,
+                    format = currencyFormat,
+                    onItemClick = { onAccountClick(item) } // ✅ Panggil aksi klik
+                )
             }
             item {
                 Divider(modifier = Modifier.padding(top = 4.dp))
@@ -59,23 +65,30 @@ fun NeracaScreen(
                 Text("KEWAJIBAN & MODAL", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Divider(modifier = Modifier.padding(vertical = 4.dp))
             }
-            // Rincian Kewajiban
             item { Text("Kewajiban", style = MaterialTheme.typography.titleMedium) }
-            items(neracaData.kewajibanItems) { item ->
-                NeracaRowItem(label = item.accountName, value = item.balance, format = currencyFormat)
+            items(neracaData.kewajibanItems, key = { it.accountName }) { item ->
+                NeracaRowItem(
+                    label = item.accountName,
+                    value = item.balance,
+                    format = currencyFormat,
+                    onItemClick = { onAccountClick(item) } // ✅ Panggil aksi klik
+                )
             }
             item { NeracaRowItem("Total Kewajiban", neracaData.totalKewajiban, currencyFormat, isSubTotal = true) }
             item { Spacer(modifier = Modifier.height(16.dp)) }
 
-            // Rincian Modal
             item { Text("Modal", style = MaterialTheme.typography.titleMedium) }
-            items(neracaData.modalItems) { item ->
-                NeracaRowItem(label = item.accountName, value = item.balance, format = currencyFormat)
+            items(neracaData.modalItems, key = { it.accountName }) { item ->
+                NeracaRowItem(
+                    label = item.accountName,
+                    value = item.balance,
+                    format = currencyFormat,
+                    onItemClick = { onAccountClick(item) } // ✅ Panggil aksi klik
+                )
             }
             item { NeracaRowItem("Total Modal", neracaData.totalModal, currencyFormat, isSubTotal = true) }
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
-            // Total Keseluruhan
             item {
                 Divider(modifier = Modifier.padding(top = 4.dp))
                 NeracaRowItem(
@@ -95,11 +108,18 @@ fun NeracaRowItem(
     value: Double,
     format: NumberFormat,
     isTotal: Boolean = false,
-    isSubTotal: Boolean = false
+    isSubTotal: Boolean = false,
+    onItemClick: (() -> Unit)? = null // ✅ Jadikan parameter opsional
 ) {
+    val clickModifier = if (onItemClick != null && !isTotal && !isSubTotal) {
+        Modifier.clickable(onClick = onItemClick)
+    } else {
+        Modifier
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(clickModifier) // Terapkan modifier clickable
             .padding(vertical = 4.dp, horizontal = if (isSubTotal || isTotal) 0.dp else 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

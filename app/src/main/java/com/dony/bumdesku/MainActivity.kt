@@ -23,6 +23,7 @@ import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.screens.BukuPembantuScreen
 import com.dony.bumdesku.screens.NeracaScreen
+import com.dony.bumdesku.screens.NeracaSaldoScreen
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -351,12 +352,30 @@ fun BumdesApp(
 
 
         composable("neraca_screen") {
-            // Kita bisa gunakan TransactionViewModel karena datanya sudah ada di sana
             val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val neracaData by viewModel.neracaData.collectAsStateWithLifecycle()
+            val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList()) // Ambil semua akun
 
             NeracaScreen(
                 neracaData = neracaData,
+                onNavigateUp = { navController.popBackStack() },
+                onAccountClick = { neracaItem ->
+                    // Cari akun yang sesuai berdasarkan nama dari item neraca yang diklik
+                    val targetAccount = allAccounts.find { it.accountName == neracaItem.accountName }
+                    if (targetAccount != null) {
+                        // Navigasi ke Buku Pembantu dengan ID akun yang ditemukan
+                        navController.navigate("buku_pembantu/${targetAccount.id}")
+                    }
+                }
+            )
+        }
+
+        composable("neraca_saldo_screen") {
+            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val neracaSaldoItems by viewModel.neracaSaldoItems.collectAsStateWithLifecycle()
+
+            NeracaSaldoScreen(
+                items = neracaSaldoItems,
                 onNavigateUp = { navController.popBackStack() }
             )
         }

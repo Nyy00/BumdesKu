@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    userRole: String
+    userRole: String // Parameter untuk hak akses
 ) {
     Scaffold(
         topBar = {
@@ -43,11 +43,11 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
-                .verticalScroll(rememberScrollState()), // Tambahkan scroll
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // --- BARIS 1 (Bisa dilihat semua peran) ---
+            // --- BARIS 1 (Menu Akuntansi Inti) ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -60,22 +60,40 @@ fun HomeScreen(
                 )
                 FeatureCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Assessment,
-                    title = "Laporan",
-                    onClick = { onNavigate("report_screen") }
+                    icon = Icons.Default.AccountBalanceWallet,
+                    title = "Daftar Akun (COA)",
+                    onClick = { onNavigate("account_list") }
                 )
             }
 
-            // --- BARIS 2 (Bisa dilihat semua peran) ---
+            // --- BARIS 2 (Menu Laporan) ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 FeatureCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccountBalanceWallet,
-                    title = "Daftar Akun (COA)",
-                    onClick = { onNavigate("account_list") }
+                    icon = Icons.Default.Assessment,
+                    title = "Laba Rugi",
+                    onClick = { onNavigate("report_screen") }
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AccountBalance,
+                    title = "Neraca",
+                    onClick = { onNavigate("neraca_screen") }
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Balance,
+                    title = "Neraca Saldo",
+                    onClick = { onNavigate("neraca_saldo_screen") }
                 )
                 FeatureCard(
                     modifier = Modifier.weight(1f),
@@ -85,26 +103,7 @@ fun HomeScreen(
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Assessment,
-                    title = "Laba Rugi", // Ganti nama Laporan menjadi lebih spesifik
-                    onClick = { onNavigate("report_screen") }
-                )
-                // ✅ TAMBAHKAN CARD BARU
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccountBalance, // Icon baru
-                    title = "Neraca",
-                    onClick = { onNavigate("neraca_screen") } // Rute baru
-                )
-            }
-
-            // --- BARIS 3 (Hanya untuk PENGURUS) ---
+            // --- BARIS 3 (Menu Khusus PENGURUS) ---
             if (userRole == "pengurus") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -128,7 +127,7 @@ fun HomeScreen(
     }
 }
 
-// FeatureCard tidak perlu diubah
+// Composable FeatureCard tidak perlu diubah
 @Composable
 fun FeatureCard(
     modifier: Modifier = Modifier,
@@ -144,7 +143,9 @@ fun FeatureCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -154,7 +155,7 @@ fun FeatureCard(
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = title,
                 fontWeight = FontWeight.SemiBold,
