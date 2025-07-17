@@ -132,6 +132,31 @@ class TransactionViewModel(
         initialValue = NeracaData()
     )
 
+    //--- BUKU PEMBANTU ---
+    fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
+        return allTransactions.map { transactions ->
+            // 1. Filter transaksi yang melibatkan akun ini
+            val filteredTx = transactions
+                .filter { it.debitAccountId == accountId || it.creditAccountId == accountId }
+                .sortedBy { it.date }
+
+            // 2. Hitung saldo berjalan
+            val runningBalances = mutableMapOf<Int, Double>()
+            var currentBalance = 0.0
+            for (tx in filteredTx) {
+                val debit = if (tx.debitAccountId == accountId) tx.amount else 0.0
+                val credit = if (tx.creditAccountId == accountId) tx.amount else 0.0
+
+                currentBalance += when(accountCategory) {
+                    AccountCategory.ASET, AccountCategory.BEBAN -> debit - credit
+                    else -> credit - debit
+                }
+                runningBalances[tx.localId] = currentBalance
+            }
+            BukuPembantuData(filteredTx, runningBalances)
+        }
+    }
+
     fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
         // ✅ Fungsi ini sekarang HANYA mengupdate filter.
         //    Sangat sederhana dan anti-gagal.

@@ -1,6 +1,7 @@
 package com.dony.bumdesku.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import com.dony.bumdesku.data.AccountCategory
 fun AccountListScreen(
     accounts: List<Account>,
     onAddAccountClick: () -> Unit,
+    onAccountClick: (Account) -> Unit, // Parameter untuk aksi klik
     onDeleteAccount: (Account) -> Unit,
     onNavigateUp: () -> Unit
 ) {
@@ -52,7 +54,11 @@ fun AccountListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(accounts, key = { it.localId }) { account ->
-                    AccountItem(account = account, onDeleteClick = { onDeleteAccount(account) })
+                    AccountItem(
+                        account = account,
+                        onItemClick = { onAccountClick(account) }, // ✅ Kirimkan aksi klik
+                        onDeleteClick = { onDeleteAccount(account) }
+                    )
                 }
             }
         }
@@ -60,10 +66,18 @@ fun AccountListScreen(
 }
 
 @Composable
-fun AccountItem(account: Account, onDeleteClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+fun AccountItem(
+    account: Account,
+    onItemClick: () -> Unit, // ✅ Tambahkan parameter ini
+    onDeleteClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onItemClick) // ✅ Buat kartu bisa diklik
+    ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -81,6 +95,7 @@ fun AccountItem(account: Account, onDeleteClick: () -> Unit) {
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

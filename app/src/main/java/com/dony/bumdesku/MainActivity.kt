@@ -21,6 +21,7 @@ import com.dony.bumdesku.repository.AssetRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.screens.*
+import com.dony.bumdesku.screens.BukuPembantuScreen
 import com.dony.bumdesku.screens.NeracaScreen
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
@@ -118,6 +119,10 @@ fun BumdesApp(
             AccountListScreen(
                 accounts = accounts,
                 onAddAccountClick = { navController.navigate("add_account") },
+                // ✅ Arahkan ke rute baru saat akun diklik
+                onAccountClick = { account ->
+                    navController.navigate("buku_pembantu/${account.id}")
+                },
                 onDeleteAccount = { account -> viewModel.delete(account) },
                 onNavigateUp = { navController.popBackStack() }
             )
@@ -321,7 +326,8 @@ fun BumdesApp(
         }
 
         composable("report_screen") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
             val reportData by transactionViewModel.reportData.collectAsState()
@@ -344,15 +350,45 @@ fun BumdesApp(
         }
 
 
-composable("neraca_screen") {
-    // Kita bisa gunakan TransactionViewModel karena datanya sudah ada di sana
-    val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-    val neracaData by viewModel.neracaData.collectAsStateWithLifecycle()
+        composable("neraca_screen") {
+            // Kita bisa gunakan TransactionViewModel karena datanya sudah ada di sana
+            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val neracaData by viewModel.neracaData.collectAsStateWithLifecycle()
 
-    NeracaScreen(
-        neracaData = neracaData,
-        onNavigateUp = { navController.popBackStack() }
-    )
-}
-}
+            NeracaScreen(
+                neracaData = neracaData,
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+
+        composable(
+            "buku_pembantu/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            if (accountId != null) {
+                val viewModel: TransactionViewModel =
+                    viewModel(factory = transactionViewModelFactory)
+                val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList())
+
+                val selectedAccount = allAccounts.find { it.id == accountId }
+
+                if (selectedAccount != null) {
+                    val bukuPembantuData by viewModel.getBukuPembantuData(
+                        accountId,
+                        selectedAccount.category
+                    )
+                        .collectAsState(initial = BukuPembantuData())
+
+                    BukuPembantuScreen(
+                        account = selectedAccount,
+                        transactions = bukuPembantuData.transactions,
+                        runningBalances = bukuPembantuData.runningBalances,
+                        onNavigateUp = { navController.popBackStack() }
+                    )
+                }
+            }
+        }
+    }
 }
