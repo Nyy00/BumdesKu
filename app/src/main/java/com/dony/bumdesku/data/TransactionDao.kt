@@ -20,5 +20,22 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY date DESC")
     fun getAllTransactions(): Flow<List<Transaction>>
 
-    // ✅ SEMUA FUNGSI LAMA YANG MENGGUNAKAN 'type' SUDAH DIHAPUS
+    // ✅ --- QUERY-QUERY INI WAJIB ADA UNTUK FILTER LAPORAN ---
+    @Query("SELECT SUM(amount) FROM transactions WHERE creditAccountId IN (:accountIds) AND date BETWEEN :startDate AND :endDate")
+    suspend fun getCreditTotalByDateRange(accountIds: List<String>, startDate: Long, endDate: Long): Double?
+
+    @Query("SELECT SUM(amount) FROM transactions WHERE debitAccountId IN (:accountIds) AND date BETWEEN :startDate AND :endDate")
+    suspend fun getDebitTotalByDateRange(accountIds: List<String>, startDate: Long, endDate: Long): Double?
+
+    @Query("SELECT SUM(amount) FROM transactions WHERE creditAccountId IN (:accountIds) AND unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate")
+    suspend fun getCreditTotalByDateRangeAndUnit(accountIds: List<String>, unitUsahaId: String, startDate: Long, endDate: Long): Double?
+
+    @Query("SELECT SUM(amount) FROM transactions WHERE debitAccountId IN (:accountIds) AND unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate")
+    suspend fun getDebitTotalByDateRangeAndUnit(accountIds: List<String>, unitUsahaId: String, startDate: Long, endDate: Long): Double?
+
+    @Query("SELECT * FROM transactions WHERE date BETWEEN :startDate AND :endDate ORDER BY date DESC")
+    fun getTransactionsByDateRange(startDate: Long, endDate: Long): Flow<List<Transaction>>
+
+    @Query("SELECT * FROM transactions WHERE unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate ORDER BY date DESC")
+    fun getTransactionsByDateAndUnit(unitUsahaId: String, startDate: Long, endDate: Long): Flow<List<Transaction>>
 }

@@ -1,20 +1,19 @@
 package com.dony.bumdesku.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.*
-import com.dony.bumdesku.data.AccountCategory
-import com.dony.bumdesku.data.NeracaData
-import com.dony.bumdesku.data.FinancialHealthData
-import com.dony.bumdesku.data.HealthStatus
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
 
+// Data class untuk menampung data grafik
 data class ChartData(
     val monthlyIncome: Map<String, Float> = emptyMap(),
     val monthlyExpenses: Map<String, Float> = emptyMap()
@@ -39,10 +38,15 @@ class TransactionViewModel(
     // --- Alur Data Utama ---
     val allTransactions: StateFlow<List<Transaction>> = _searchQuery.flatMapLatest { query ->
         transactionRepository.allTransactions.map { list ->
-            if (query.isBlank()) list else list.filter { it.description.contains(query, ignoreCase = true) }
+            if (query.isBlank()) list else list.filter {
+                it.description.contains(query, ignoreCase = true) ||
+                        it.debitAccountName.contains(query, ignoreCase = true) ||
+                        it.creditAccountName.contains(query, ignoreCase = true)
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // --- Data Kalkulasi Otomatis ---
     val dashboardData: StateFlow<DashboardData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
         val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
         val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
@@ -75,53 +79,27 @@ class TransactionViewModel(
         ChartData(finalIncome, finalExpenses)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChartData())
 
-    // --- LOGIKA LAPORAN YANG DIPERBAIKI ---
-    private val _reportData = MutableStateFlow(ReportData())
-    val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
-
-    private val _reportFilters = MutableStateFlow<Triple<Long, Long, String?>>(Triple(0L, 0L, null))
-    val filteredReportTransactions: StateFlow<List<Transaction>> = _reportFilters.flatMapLatest { (start, end, unitId) ->
-        if (start == 0L || end == 0L) {
-            flowOf(emptyList())
-        } else {
-            allTransactions.map { list ->
-                list.filter {
-                    val dateMatch = it.date in start..end
-                    val unitMatch = if (unitId == null) true else it.unitUsahaId == unitId
-                    dateMatch && unitMatch
-                }
-            }
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // ✅ --- LOGIKA NERACA YANG SUDAH DETAIL ---
     val neracaData: StateFlow<NeracaData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
         val asetItems = mutableListOf<NeracaItem>()
         val kewajibanItems = mutableListOf<NeracaItem>()
         val modalItems = mutableListOf<NeracaItem>()
-
         val debits = transactions.groupBy { it.debitAccountId }
         val credits = transactions.groupBy { it.creditAccountId }
-
         for (account in accounts) {
             val totalDebit = debits[account.id]?.sumOf { it.amount } ?: 0.0
             val totalKredit = credits[account.id]?.sumOf { it.amount } ?: 0.0
-
             val saldoAkhir = when (account.category) {
                 AccountCategory.ASET, AccountCategory.BEBAN -> totalDebit - totalKredit
                 else -> totalKredit - totalDebit
             }
-
-            // Tambahkan rincian akun ke daftar yang sesuai
             val neracaItem = NeracaItem(account.accountName, saldoAkhir)
             when (account.category) {
                 AccountCategory.ASET -> asetItems.add(neracaItem)
                 AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
                 AccountCategory.MODAL -> modalItems.add(neracaItem)
-                else -> { /* Abaikan Pendapatan dan Beban */ }
+                else -> {}
             }
         }
-
         NeracaData(
             asetItems = asetItems,
             kewajibanItems = kewajibanItems,
@@ -130,25 +108,11 @@ class TransactionViewModel(
             totalKewajiban = kewajibanItems.sumOf { it.balance },
             totalModal = modalItems.sumOf { it.balance }
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = NeracaData()
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NeracaData())
 
-    // ✅ --- LOGIKA BARU UNTUK KESEHATAN KEUANGAN ---
     val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        // Ambil semua akun Aset Lancar (nomor diawali '11')
-        val asetLancarIds = accounts
-            .filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }
-            .map { it.id }
-
-        // Ambil semua akun Kewajiban Lancar (nomor diawali '21')
-        val kewajibanLancarIds = accounts
-            .filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }
-            .map { it.id }
-
-        // Hitung total saldo Aset Lancar
+        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }.map { it.id }
+        val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }.map { it.id }
         val totalAsetLancar = transactions.sumOf {
             when {
                 it.debitAccountId in asetLancarIds -> it.amount
@@ -156,8 +120,6 @@ class TransactionViewModel(
                 else -> 0.0
             }
         }
-
-        // Hitung total saldo Kewajiban Lancar
         val totalKewajibanLancar = transactions.sumOf {
             when {
                 it.creditAccountId in kewajibanLancarIds -> it.amount
@@ -165,46 +127,20 @@ class TransactionViewModel(
                 else -> 0.0
             }
         }
-
-        // Hitung Rasio Lancar
-        val currentRatio = if (totalKewajibanLancar > 0) {
-            (totalAsetLancar / totalKewajibanLancar).toFloat()
-        } else {
-            0f // Hindari pembagian dengan nol
-        }
-
-        // Tentukan status kesehatan
+        val currentRatio = if (totalKewajibanLancar > 0) (totalAsetLancar / totalKewajibanLancar).toFloat() else 0f
         val status = when {
             currentRatio >= 1.5f -> HealthStatus.SEHAT
             currentRatio >= 1.0f -> HealthStatus.WASPADA
             else -> HealthStatus.TIDAK_SEHAT
         }
-
         FinancialHealthData(currentRatio, status)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = FinancialHealthData()
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialHealthData())
 
-    // ✅ --- LOGIKA BARU UNTUK NERACA SALDO ---
     val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        // Buat daftar kosong untuk menampung hasil
         val saldoItems = mutableListOf<NeracaSaldoItem>()
-
-        // Untuk setiap akun yang ada di Chart of Accounts...
         for (account in accounts) {
-            // Hitung total semua transaksi di mana akun ini ada di sisi DEBIT
-            val totalDebit = transactions
-                .filter { it.debitAccountId == account.id }
-                .sumOf { it.amount }
-
-            // Hitung total semua transaksi di mana akun ini ada di sisi KREDIT
-            val totalKredit = transactions
-                .filter { it.creditAccountId == account.id }
-                .sumOf { it.amount }
-
-            // Tambahkan ke daftar HANYA jika ada transaksi
+            val totalDebit = transactions.filter { it.debitAccountId == account.id }.sumOf { it.amount }
+            val totalKredit = transactions.filter { it.creditAccountId == account.id }.sumOf { it.amount }
             if (totalDebit > 0 || totalKredit > 0) {
                 saldoItems.add(
                     NeracaSaldoItem(
@@ -216,28 +152,78 @@ class TransactionViewModel(
                 )
             }
         }
-        saldoItems // Kembalikan daftar yang sudah diisi
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+        saldoItems
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    //--- BUKU PEMBANTU ---
+    // --- Logika Laporan ---
+    private val _reportData = MutableStateFlow(ReportData())
+    val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
+
+    private val _filteredReportTransactions = MutableStateFlow<List<Transaction>>(emptyList())
+    val filteredReportTransactions: StateFlow<List<Transaction>> = _filteredReportTransactions.asStateFlow()
+
+    private var filterJob: Job? = null
+
+    fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
+        filterJob?.cancel()
+        filterJob = viewModelScope.launch {
+            val accounts = _allAccounts.first()
+            val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+            val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+
+            // Panggil fungsi getReportData dari repository
+            val (income, expenses) = transactionRepository.getReportData(
+                startDate,
+                endDate,
+                unitUsaha?.id,
+                pendapatanAccountIds,
+                bebanAccountIds
+            )
+
+            _reportData.value = ReportData(
+                totalIncome = income,
+                totalExpenses = expenses,
+                netProfit = income - expenses,
+                isGenerated = true,
+                startDate = startDate,
+                endDate = endDate,
+                unitUsahaName = unitUsaha?.name ?: "Semua Unit Usaha",
+                unitUsahaId = unitUsaha?.id
+            )
+
+            // Panggil fungsi getFilteredTransactions dari repository
+            transactionRepository.getFilteredTransactions(startDate, endDate, unitUsaha?.id)
+                .collect { filteredList ->
+                    _filteredReportTransactions.value = filteredList
+                }
+        }
+    }
+
+    private fun calculateReportTotals(transactions: List<Transaction>): Pair<Double, Double> {
+        val accounts = _allAccounts.value
+        val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+        val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+        val income = transactions.filter { it.creditAccountId in pendapatanAccountIds }.sumOf { it.amount }
+        val expenses = transactions.filter { it.debitAccountId in bebanAccountIds }.sumOf { it.amount }
+        return Pair(income, expenses)
+    }
+
+    fun clearReport() {
+        _reportData.value = ReportData()
+        _filteredReportTransactions.value = emptyList()
+        filterJob?.cancel()
+    }
+
     fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
         return allTransactions.map { transactions ->
-            // 1. Filter transaksi yang melibatkan akun ini
             val filteredTx = transactions
                 .filter { it.debitAccountId == accountId || it.creditAccountId == accountId }
                 .sortedBy { it.date }
-
-            // 2. Hitung saldo berjalan
             val runningBalances = mutableMapOf<Int, Double>()
             var currentBalance = 0.0
             for (tx in filteredTx) {
                 val debit = if (tx.debitAccountId == accountId) tx.amount else 0.0
                 val credit = if (tx.creditAccountId == accountId) tx.amount else 0.0
-
                 currentBalance += when(accountCategory) {
                     AccountCategory.ASET, AccountCategory.BEBAN -> debit - credit
                     else -> credit - debit
@@ -246,17 +232,6 @@ class TransactionViewModel(
             }
             BukuPembantuData(filteredTx, runningBalances)
         }
-    }
-
-    fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
-        // ✅ Fungsi ini sekarang HANYA mengupdate filter.
-        //    Sangat sederhana dan anti-gagal.
-        _reportFilters.value = Triple(startDate, endDate, unitUsaha?.id)
-    }
-
-    fun clearReport() {
-        _reportData.value = ReportData()
-        _reportFilters.value = Triple(0L, 0L, null)
     }
 
     // --- CRUD Operations ---
