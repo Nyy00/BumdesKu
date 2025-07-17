@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import com.dony.bumdesku.data.Account
+import com.dony.bumdesku.data.AccountCategory
 import com.dony.bumdesku.data.ReportData
 import com.dony.bumdesku.data.Transaction
 import java.io.File
@@ -23,7 +25,8 @@ object PdfExporter {
     fun createReportPdf(
         context: Context,
         reportData: ReportData,
-        transactions: List<Transaction> // Daftar transaksi yang sudah difilter
+        transactions: List<Transaction>,
+        allAccounts: List<Account> // Parameter ini sudah kita tambahkan sebelumnya
     ) {
         val pageHeight = 1120
         val pagewidth = 792
@@ -39,7 +42,7 @@ object PdfExporter {
             isFakeBoldText = true
         }
 
-        val subtitlePaint = Paint().apply { // Paint baru untuk subjudul
+        val subtitlePaint = Paint().apply {
             color = Color.DKGRAY
             textSize = 16f
         }
@@ -62,10 +65,8 @@ object PdfExporter {
         // Judul Laporan
         canvas.drawText("Laporan Keuangan BUMDes", 40f, yPosition, titlePaint)
         yPosition += 25f
-        // ✅ Subjudul dengan nama Unit Usaha dari ReportData
         canvas.drawText(reportData.unitUsahaName, 40f, yPosition, subtitlePaint)
         yPosition += 15f
-        // Rentang Tanggal
         val dateFormatPeriod = SimpleDateFormat("dd MMM yyyy", localeID)
         val periodText = "${dateFormatPeriod.format(Date(reportData.startDate))} - ${dateFormatPeriod.format(Date(reportData.endDate))}"
         canvas.drawText(periodText, 40f, yPosition, textPaint)
@@ -73,9 +74,9 @@ object PdfExporter {
 
         // Ringkasan
         val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
-        canvas.drawText("Total Pemasukan: ${currencyFormat.format(reportData.totalIncome)}", 40f, yPosition, textPaint)
+        canvas.drawText("Total Pendapatan: ${currencyFormat.format(reportData.totalIncome)}", 40f, yPosition, textPaint)
         yPosition += 25f
-        canvas.drawText("Total Pengeluaran: ${currencyFormat.format(reportData.totalExpenses)}", 40f, yPosition, textPaint)
+        canvas.drawText("Total Beban: ${currencyFormat.format(reportData.totalExpenses)}", 40f, yPosition, textPaint)
         yPosition += 25f
         canvas.drawText("Laba Bersih: ${currencyFormat.format(reportData.netProfit)}", 40f, yPosition, headerPaint)
         yPosition += 50f
@@ -87,23 +88,31 @@ object PdfExporter {
         canvas.drawText("Pengeluaran", 600f, yPosition, headerPaint)
         yPosition += 10f
 
-        // Garis pemisah
         canvas.drawLine(40f, yPosition, pagewidth - 40f, yPosition, headerPaint)
         yPosition += 20f
 
-        // Isi Tabel (daftar transaksi)
+        // ✅ --- LOGIKA TABEL YANG DIPERBAIKI ---
         val dateFormatTable = SimpleDateFormat("dd-MM-yy", localeID)
+
+        // Dapatkan daftar ID untuk akun pendapatan dan beban
+        val pendapatanAccountIds = allAccounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+        val bebanAccountIds = allAccounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+
         for (tx in transactions) {
             canvas.drawText(dateFormatTable.format(Date(tx.date)), 40f, yPosition, textPaint)
             canvas.drawText(tx.description, 120f, yPosition, textPaint)
 
-            if (tx.type == "PEMASUKAN") {
+            // Cek apakah ini transaksi pendapatan atau beban
+            if (tx.creditAccountId in pendapatanAccountIds) {
+                // Jika kreditnya adalah akun pendapatan, tampilkan di kolom Pemasukan
                 canvas.drawText(currencyFormat.format(tx.amount), 450f, yPosition, textPaint)
-            } else {
+            } else if (tx.debitAccountId in bebanAccountIds) {
+                // Jika debitnya adalah akun beban, tampilkan di kolom Pengeluaran
                 canvas.drawText(currencyFormat.format(tx.amount), 600f, yPosition, textPaint)
             }
             yPosition += 25f
         }
+        // --- AKHIR LOGIKA TABEL ---
 
         pdfDocument.finishPage(page)
         savePdfToFile(context, pdfDocument)

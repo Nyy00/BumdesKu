@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.dony.bumdesku.data.DashboardData
 import com.dony.bumdesku.data.Transaction
 import java.text.NumberFormat
@@ -21,8 +20,7 @@ import java.util.*
 @Composable
 fun DashboardCard(data: DashboardData) {
     val localeID = Locale("in", "ID")
-    val currencyFormat =
-        NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
+    val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
 
     Card(
         modifier = Modifier
@@ -82,12 +80,11 @@ fun DashboardCard(data: DashboardData) {
 fun TransactionItem(
     transaction: Transaction,
     onItemClick: () -> Unit,
-    userRole: String,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    userRole: String
 ) {
     val localeID = Locale("in", "ID")
-    val currencyFormat =
-        NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
+    val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
     val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", localeID)
     val formattedAmount = currencyFormat.format(transaction.amount)
     val formattedDate = dateFormat.format(Date(transaction.date))
@@ -95,39 +92,58 @@ fun TransactionItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onItemClick),
+            .clickable { if (userRole == "pengurus") onItemClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transaction.description,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-                Text(text = transaction.category, fontSize = 14.sp)
-                Text(text = formattedDate, fontSize = 12.sp, color = Color.Gray)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = formattedAmount,
-                color = if (transaction.type == "PEMASUKAN") Color(0xFF008800) else Color.Red,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-            if (userRole == "pengurus") {
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Hapus Transaksi",
-                        tint = Color.Gray
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = transaction.description,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = formattedDate,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
                     )
                 }
+                if (userRole == "pengurus") {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(Icons.Default.Delete, "Hapus Transaksi", tint = Color.Gray)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = transaction.debitAccountName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = formattedAmount,
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = transaction.creditAccountName,
+                    modifier = Modifier.weight(1f).padding(start = 24.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = formattedAmount,
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
             }
         }
     }

@@ -2,7 +2,9 @@ package com.dony.bumdesku.screens
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,7 +20,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    userRole: String // ✅ Tambahkan kembali parameter ini
+    userRole: String
 ) {
     Scaffold(
         topBar = {
@@ -35,15 +37,55 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
+        // Gunakan Column dengan verticalScroll agar bisa di-scroll jika menu banyak
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()), // Tambahkan scroll
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Menu yang hanya bisa dilihat oleh PENGURUS
+            // --- BARIS 1 (Bisa dilihat semua peran) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.FormatListBulleted,
+                    title = "Buku Besar",
+                    onClick = { onNavigate("transaction_list") }
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Assessment,
+                    title = "Laporan",
+                    onClick = { onNavigate("report_screen") }
+                )
+            }
+
+            // --- BARIS 2 (Bisa dilihat semua peran) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AccountBalanceWallet,
+                    title = "Daftar Akun (COA)",
+                    onClick = { onNavigate("account_list") }
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Store,
+                    title = "Unit Usaha",
+                    onClick = { onNavigate("unit_usaha_management") }
+                )
+            }
+
+            // --- BARIS 3 (Hanya untuk PENGURUS) ---
             if (userRole == "pengurus") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -52,7 +94,7 @@ fun HomeScreen(
                     FeatureCard(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Default.AddCircle,
-                        title = "Tambah Transaksi",
+                        title = "Input Jurnal",
                         onClick = { onNavigate("add_transaction") }
                     )
                     FeatureCard(
@@ -63,41 +105,11 @@ fun HomeScreen(
                     )
                 }
             }
-
-            // Menu yang bisa dilihat oleh SEMUA PERAN
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.FormatListBulleted,
-                    title = "Lihat Transaksi",
-                    onClick = { onNavigate("transaction_list") }
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Assessment,
-                    title = "Laporan",
-                    onClick = { onNavigate("report_screen") }
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Store,
-                    title = "Unit Usaha",
-                    onClick = { onNavigate("unit_usaha_management") }
-                )
-                Spacer(modifier = Modifier.weight(1f))
-            }
         }
     }
 }
 
+// FeatureCard tidak perlu diubah
 @Composable
 fun FeatureCard(
     modifier: Modifier = Modifier,
@@ -107,7 +119,7 @@ fun FeatureCard(
 ) {
     Card(
         modifier = modifier
-            .aspectRatio(1f) // Membuat kartu menjadi persegi
+            .aspectRatio(1f)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -127,7 +139,8 @@ fun FeatureCard(
             Text(
                 text = title,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
+                maxLines = 2
             )
         }
     }

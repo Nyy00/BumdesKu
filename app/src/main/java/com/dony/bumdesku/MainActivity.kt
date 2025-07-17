@@ -15,9 +15,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.dony.bumdesku.data.Asset
-import com.dony.bumdesku.data.BumdesDatabase
-import com.dony.bumdesku.data.UnitUsaha
+import com.dony.bumdesku.data.*
+import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.AssetRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
@@ -37,23 +36,28 @@ class MainActivity : ComponentActivity() {
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
         val assetDao = database.assetDao()
+        val accountDao = database.accountDao() // Pastikan ini sudah ada
 
         // Inisialisasi semua Repository
         val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
+        val accountRepository = AccountRepository(accountDao) // Pastikan ini sudah ada
 
         // Inisialisasi semua ViewModelFactory
-        val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository)
+        val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val authViewModelFactory = AuthViewModelFactory()
         val assetViewModelFactory = AssetViewModelFactory(assetRepository)
+        val accountViewModelFactory = AccountViewModelFactory(accountRepository) // Pastikan ini sudah ada
 
         setContent {
             BumdesKuTheme {
+                // ✅ Berikan factory yang baru ke BumdesApp
                 BumdesApp(
                     transactionViewModelFactory = transactionViewModelFactory,
                     authViewModelFactory = authViewModelFactory,
-                    assetViewModelFactory = assetViewModelFactory
+                    assetViewModelFactory = assetViewModelFactory,
+                    accountViewModelFactory = accountViewModelFactory
                 )
             }
         }
@@ -64,7 +68,8 @@ class MainActivity : ComponentActivity() {
 fun BumdesApp(
     transactionViewModelFactory: TransactionViewModelFactory,
     authViewModelFactory: AuthViewModelFactory,
-    assetViewModelFactory: AssetViewModelFactory
+    assetViewModelFactory: AssetViewModelFactory,
+    accountViewModelFactory: AccountViewModelFactory // ✅ Terima parameter baru
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -105,6 +110,29 @@ fun BumdesApp(
                 }
             }
         }
+
+        composable("account_list") {
+            val viewModel: AccountViewModel = viewModel(factory = accountViewModelFactory)
+            val accounts by viewModel.allAccounts.collectAsState(initial = emptyList())
+            AccountListScreen(
+                accounts = accounts,
+                onAddAccountClick = { navController.navigate("add_account") },
+                onDeleteAccount = { account -> viewModel.delete(account) },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("add_account") {
+            val viewModel: AccountViewModel = viewModel(factory = accountViewModelFactory)
+            AddAccountScreen(
+                onSave = { account ->
+                    viewModel.insert(account)
+                    navController.popBackStack()
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
 
         composable("register") {
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
@@ -186,7 +214,8 @@ fun BumdesApp(
 
         // ✅ INI VERSI YANG BENAR DAN LENGKAP (yang duplikat sudah dihapus)
         composable("transaction_list") {
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
             // Ambil data yang dibutuhkan, termasuk searchQuery
@@ -239,11 +268,13 @@ fun BumdesApp(
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
             if (transactionId != null) {
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
-                    .collectAsStateWithLifecycle(null)
+                    .collectAsStateWithLifecycle(initialValue = null)
+
+                // Tampilkan layar hanya jika data sudah siap
                 transactionToEdit?.let { transaction ->
                     AddTransactionScreen(
                         viewModel = transactionViewModel,
-                        transactionToEdit = transaction,
+                        transactionToEdit = transaction, // <-- Kirim data untuk di-edit
                         onSave = { updatedTransaction ->
                             transactionViewModel.update(updatedTransaction)
                             navController.popBackStack()
@@ -289,23 +320,21 @@ fun BumdesApp(
         }
 
         composable("report_screen") {
-            // Ambil ViewModel yang dibutuhkan
             val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
-            // Ambil semua state yang relevan dari ViewModel
-            val reportData by transactionViewModel.reportData.collectAsStateWithLifecycle()
-            // ✅ Ambil daftar transaksi dari StateFlow yang BARU dan REAKTIF
-            val reportTransactions by transactionViewModel.filteredReportTransactions.collectAsStateWithLifecycle()
-            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
-            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+            val reportData by transactionViewModel.reportData.collectAsState()
+            val reportTransactions by transactionViewModel.filteredReportTransactions.collectAsState()
+            val userProfile by authViewModel.userProfile.collectAsState()
+            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsState(initial = emptyList())
+            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList()) // ✅ Ambil daftar akun
 
             ReportScreen(
                 reportData = reportData,
                 unitUsahaList = unitUsahaList,
                 userRole = userProfile?.role ?: "pengurus",
-                // ✅ Berikan daftar transaksi yang sudah jadi, TANPA perlu filter manual di sini
                 reportTransactions = reportTransactions,
+                allAccounts = allAccounts, // ✅ Kirimkan daftar akun
                 onGenerateReport = { startDate, endDate, unitUsaha ->
                     transactionViewModel.generateReport(startDate, endDate, unitUsaha)
                 },

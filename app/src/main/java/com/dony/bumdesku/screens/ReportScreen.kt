@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dony.bumdesku.PdfExporter
+import com.dony.bumdesku.data.Account
 import com.dony.bumdesku.data.DashboardData
 import com.dony.bumdesku.data.ReportData
 import com.dony.bumdesku.data.Transaction
@@ -27,6 +28,7 @@ fun ReportScreen(
     reportTransactions: List<Transaction>,
     unitUsahaList: List<UnitUsaha>, // <-- Tambahkan parameter ini
     userRole: String,
+    allAccounts: List<Account>,
     onGenerateReport: (Long, Long, UnitUsaha?) -> Unit, // <-- Ubah parameter ini
     onNavigateUp: () -> Unit
     // onItemClick kita hapus karena tidak digunakan di sini
@@ -65,7 +67,7 @@ fun ReportScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        PdfExporter.createReportPdf(context, reportData, reportTransactions)
+                        PdfExporter.createReportPdf(context, reportData, reportTransactions, allAccounts)
                     }) {
                         Icon(
                             imageVector = Icons.Default.PictureAsPdf,

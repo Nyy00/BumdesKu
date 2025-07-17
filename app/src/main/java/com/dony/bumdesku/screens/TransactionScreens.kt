@@ -9,24 +9,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dony.bumdesku.data.DashboardData
-import com.dony.bumdesku.data.Transaction
-import com.dony.bumdesku.data.UnitUsaha
-import com.dony.bumdesku.viewmodel.TransactionViewModel
+import com.dony.bumdesku.data.*
 import com.dony.bumdesku.viewmodel.ChartData
-import com.dony.bumdesku.screens.MonthlyBarChart
+import com.dony.bumdesku.viewmodel.TransactionViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +50,7 @@ fun TransactionListScreen(
                             value = searchQuery,
                             onValueChange = onSearchQueryChange,
                             modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("Cari deskripsi atau kategori...") },
+                            placeholder = { Text("Cari deskripsi...") },
                             singleLine = true,
                             trailingIcon = {
                                 IconButton(onClick = {
@@ -72,12 +65,15 @@ fun TransactionListScreen(
                             }
                         )
                     } else {
-                        Text("Daftar Transaksi")
+                        Text("Buku Besar & Jurnal")
                     }
                 },
                 navigationIcon = {
                     if (isSearchActive) {
-                        IconButton(onClick = { isSearchActive = false }) {
+                        IconButton(onClick = {
+                            isSearchActive = false
+                            onSearchQueryChange("")
+                        }) {
                             Icon(Icons.Default.ArrowBack, "Tutup Pencarian")
                         }
                     } else {
@@ -104,7 +100,7 @@ fun TransactionListScreen(
         floatingActionButton = {
             if (userRole == "pengurus" && !isSearchActive) {
                 FloatingActionButton(onClick = onAddItemClick) {
-                    Icon(Icons.Default.Add, "Tambah Transaksi")
+                    Icon(Icons.Default.Add, "Input Jurnal")
                 }
             }
         }
@@ -113,14 +109,14 @@ fun TransactionListScreen(
             AlertDialog(
                 onDismissRequest = { transactionToDelete = null },
                 title = { Text("Konfirmasi Hapus") },
-                text = { Text("Apakah Anda yakin ingin menghapus transaksi '${transactionToDelete?.description}'?") },
+                text = { Text("Apakah Anda yakin ingin menghapus jurnal '${transactionToDelete?.description}'?") },
                 confirmButton = {
                     Button(
                         onClick = {
                             onDeleteClick(transactionToDelete!!)
                             transactionToDelete = null
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                     ) { Text("Hapus") }
                 },
                 dismissButton = {
@@ -129,13 +125,11 @@ fun TransactionListScreen(
             )
         }
 
-        // Konten utama
         Column(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Tampilkan Dashboard Card dan Grafik hanya jika tidak sedang mencari
             if (!isSearchActive) {
                 DashboardCard(data = dashboardData)
                 MonthlyBarChart(chartData = chartData)
@@ -147,20 +141,20 @@ fun TransactionListScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(if (searchQuery.isNotEmpty()) "Transaksi tidak ditemukan." else "Belum ada transaksi.", style = MaterialTheme.typography.bodyLarge)
+                    Text(if (searchQuery.isNotEmpty()) "Jurnal tidak ditemukan." else "Belum ada jurnal.", style = MaterialTheme.typography.bodyLarge)
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(transactions, key = { it.localId }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
                             userRole = userRole,
-                            onItemClick = { if (userRole == "pengurus") onItemClick(transaction) },
-                            onDeleteClick = { if (userRole == "pengurus") transactionToDelete = transaction }
+                            onItemClick = { onItemClick(transaction) },
+                            onDeleteClick = { transactionToDelete = transaction }
                         )
                     }
                 }
@@ -177,111 +171,77 @@ fun AddTransactionScreen(
     onNavigateUp: () -> Unit,
     viewModel: TransactionViewModel
 ) {
-    val unitUsahaList by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+    // ✅ Tambahkan initialValue di sini
+// ✅ INI KODE YANG BENAR
+    val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList())
+    val unitUsahaList by viewModel.allUnitUsaha.collectAsState(initial = emptyList())
+
+    val context = LocalContext.current
 
     var description by remember { mutableStateOf(transactionToEdit?.description ?: "") }
     var amount by remember { mutableStateOf(transactionToEdit?.amount?.takeIf { it > 0 }?.toString() ?: "") }
-    var category by remember { mutableStateOf(transactionToEdit?.category ?: "") }
-    val transactionTypes = listOf("PEMASUKAN", "PENGELUARAN")
-    // State untuk tipe transaksi yang dipilih
-    var selectedType by remember { mutableStateOf(transactionToEdit?.type ?: transactionTypes[0]) }
-
     var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
     var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+    var debitAccount by remember { mutableStateOf<Account?>(null) }
+    var isDebitExpanded by remember { mutableStateOf(false) }
+    var creditAccount by remember { mutableStateOf<Account?>(null) }
+    var isCreditExpanded by remember { mutableStateOf(false) }
+    val screenTitle = if (transactionToEdit == null) "Input Jurnal Umum" else "Edit Jurnal"
 
-    LaunchedEffect(unitUsahaList, transactionToEdit) {
-        if (transactionToEdit != null && unitUsahaList.isNotEmpty()) {
-            selectedUnitUsaha = unitUsahaList.find { it.id == transactionToEdit.unitUsahaId }
+    LaunchedEffect(key1 = transactionToEdit, key2 = allAccounts, key3 = unitUsahaList) {
+        if (transactionToEdit != null && allAccounts.isNotEmpty()) {
+            debitAccount = allAccounts.find { it.id == transactionToEdit.debitAccountId }
+            creditAccount = allAccounts.find { it.id == transactionToEdit.creditAccountId }
+            if (transactionToEdit.unitUsahaId.isNotBlank() && unitUsahaList.isNotEmpty()) {
+                selectedUnitUsaha = unitUsahaList.find { it.id == transactionToEdit.unitUsahaId }
+            }
         }
     }
 
-    val context = LocalContext.current
-    val screenTitle = if (transactionToEdit == null) "Tambah Transaksi Baru" else "Edit Transaksi"
-
     Scaffold(
         topBar = { TopAppBar(title = { Text(screenTitle) }, navigationIcon = {
-            IconButton(onClick = onNavigateUp) {
-                Icon(Icons.Default.ArrowBack, "Kembali")
-            }
+            IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") }
         }) }
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("Deskripsi") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Transaksi") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Nominal") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
 
-            OutlinedTextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text("Nominal (Contoh: 50000)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            OutlinedTextField(
-                value = category,
-                onValueChange = { category = it },
-                label = { Text("Kategori (Contoh: Sewa Kursi)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // --- ✅ KODE BARU UNTUK PILIHAN PEMASUKAN/PENGELUARAN ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                transactionTypes.forEach { text ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { selectedType = text }
-                    ) {
-                        RadioButton(
-                            selected = (text == selectedType),
-                            onClick = { selectedType = text }
-                        )
-                        Text(text = text, modifier = Modifier.padding(start = 4.dp))
+            ExposedDropdownMenuBox(expanded = isDebitExpanded, onExpandedChange = { isDebitExpanded = !isDebitExpanded }) {
+                OutlinedTextField(value = debitAccount?.let { "${it.accountNumber} - ${it.accountName}" } ?: "Pilih Akun Debit", onValueChange = {}, readOnly = true, label = { Text("Akun Debit") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDebitExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+                ExposedDropdownMenu(expanded = isDebitExpanded, onDismissRequest = { isDebitExpanded = false }) {
+                    allAccounts.forEach { account ->
+                        DropdownMenuItem(text = { Text("${account.accountNumber} - ${account.accountName}") }, onClick = {
+                            debitAccount = account
+                            isDebitExpanded = false
+                        })
                     }
                 }
             }
-            // --------------------------------------------------------
 
-            ExposedDropdownMenuBox(
-                expanded = isUnitUsahaExpanded,
-                onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }
-            ) {
-                OutlinedTextField(
-                    value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Unit Usaha") },
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded)
-                    },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
-                )
-                ExposedDropdownMenu(
-                    expanded = isUnitUsahaExpanded,
-                    onDismissRequest = { isUnitUsahaExpanded = false }
-                ) {
+            ExposedDropdownMenuBox(expanded = isCreditExpanded, onExpandedChange = { isCreditExpanded = !isCreditExpanded }) {
+                OutlinedTextField(value = creditAccount?.let { "${it.accountNumber} - ${it.accountName}" } ?: "Pilih Akun Kredit", onValueChange = {}, readOnly = true, label = { Text("Akun Kredit") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCreditExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+                ExposedDropdownMenu(expanded = isCreditExpanded, onDismissRequest = { isCreditExpanded = false }) {
+                    allAccounts.forEach { account ->
+                        DropdownMenuItem(text = { Text("${account.accountNumber} - ${account.accountName}") }, onClick = {
+                            creditAccount = account
+                            isCreditExpanded = false
+                        })
+                    }
+                }
+            }
+
+            ExposedDropdownMenuBox(expanded = isUnitUsahaExpanded, onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }) {
+                OutlinedTextField(value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha (Opsional)", onValueChange = {}, readOnly = true, label = { Text("Unit Usaha") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())
+                ExposedDropdownMenu(expanded = isUnitUsahaExpanded, onDismissRequest = { isUnitUsahaExpanded = false }) {
                     unitUsahaList.forEach { unit ->
-                        DropdownMenuItem(
-                            text = { Text(unit.name) },
-                            onClick = {
-                                selectedUnitUsaha = unit
-                                isUnitUsahaExpanded = false
-                            }
-                        )
+                        DropdownMenuItem(text = { Text(unit.name) }, onClick = {
+                            selectedUnitUsaha = unit
+                            isUnitUsahaExpanded = false
+                        })
                     }
                 }
             }
@@ -291,26 +251,27 @@ fun AddTransactionScreen(
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
-                    if (description.isNotBlank() && amountDouble != null && category.isNotBlank() && selectedUnitUsaha != null) {
-                        val newTransaction = Transaction(
-                            localId = transactionToEdit?.localId ?: 0,
-                            id = transactionToEdit?.id ?: "",
-                            amount = amountDouble,
-                            type = selectedType, // Gunakan state yang dipilih
-                            category = category,
-                            description = description,
-                            date = transactionToEdit?.date ?: System.currentTimeMillis(),
-                            unitUsahaId = selectedUnitUsaha!!.id
+                    if (description.isNotBlank() && amountDouble != null && debitAccount != null && creditAccount != null) {
+                        onSave(
+                            Transaction(
+                                localId = transactionToEdit?.localId ?: 0,
+                                id = transactionToEdit?.id ?: "",
+                                description = description,
+                                amount = amountDouble,
+                                date = transactionToEdit?.date ?: System.currentTimeMillis(),
+                                debitAccountId = debitAccount!!.id,
+                                creditAccountId = creditAccount!!.id,
+                                debitAccountName = debitAccount!!.accountName,
+                                creditAccountName = creditAccount!!.accountName,
+                                unitUsahaId = selectedUnitUsaha?.id ?: ""
+                            )
                         )
-                        onSave(newTransaction)
                     } else {
-                        Toast.makeText(context, "Harap isi semua kolom, termasuk Unit Usaha", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Harap isi semua kolom dengan benar.", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(if (transactionToEdit == null) "Simpan" else "Perbarui")
-            }
+            ) { Text("Simpan Jurnal") }
         }
     }
 }
