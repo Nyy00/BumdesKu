@@ -21,6 +21,7 @@ import com.dony.bumdesku.repository.AssetRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.screens.*
+import com.dony.bumdesku.screens.NeracaScreen
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -341,5 +342,17 @@ fun BumdesApp(
                 onNavigateUp = { navController.popBackStack() }
             )
         }
-    }
+
+
+composable("neraca_screen") {
+    // Kita bisa gunakan TransactionViewModel karena datanya sudah ada di sana
+    val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+    val neracaData by viewModel.neracaData.collectAsStateWithLifecycle()
+
+    NeracaScreen(
+        neracaData = neracaData,
+        onNavigateUp = { navController.popBackStack() }
+    )
+}
+}
 }

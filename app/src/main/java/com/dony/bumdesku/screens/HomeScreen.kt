@@ -85,6 +85,25 @@ fun HomeScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Assessment,
+                    title = "Laba Rugi", // Ganti nama Laporan menjadi lebih spesifik
+                    onClick = { onNavigate("report_screen") }
+                )
+                // ✅ TAMBAHKAN CARD BARU
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AccountBalance, // Icon baru
+                    title = "Neraca",
+                    onClick = { onNavigate("neraca_screen") } // Rute baru
+                )
+            }
+
             // --- BARIS 3 (Hanya untuk PENGURUS) ---
             if (userRole == "pengurus") {
                 Row(
