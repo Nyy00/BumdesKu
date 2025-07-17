@@ -94,38 +94,42 @@ class TransactionViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    //-- NERACA DATA --
+    // ✅ --- LOGIKA NERACA YANG SUDAH DETAIL ---
     val neracaData: StateFlow<NeracaData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        var totalAset = 0.0
-        var totalKewajiban = 0.0
-        var totalModal = 0.0
+        val asetItems = mutableListOf<NeracaItem>()
+        val kewajibanItems = mutableListOf<NeracaItem>()
+        val modalItems = mutableListOf<NeracaItem>()
 
-        // Kelompokkan transaksi berdasarkan ID akun
         val debits = transactions.groupBy { it.debitAccountId }
         val credits = transactions.groupBy { it.creditAccountId }
 
-        // Hitung saldo akhir untuk setiap akun
         for (account in accounts) {
             val totalDebit = debits[account.id]?.sumOf { it.amount } ?: 0.0
             val totalKredit = credits[account.id]?.sumOf { it.amount } ?: 0.0
 
             val saldoAkhir = when (account.category) {
-                // Saldo normal Aset & Beban ada di Debit
                 AccountCategory.ASET, AccountCategory.BEBAN -> totalDebit - totalKredit
-                // Saldo normal Kewajiban, Modal, Pendapatan ada di Kredit
-                AccountCategory.KEWAJIBAN, AccountCategory.MODAL, AccountCategory.PENDAPATAN -> totalKredit - totalDebit
+                else -> totalKredit - totalDebit
             }
 
-            // Tambahkan saldo akhir ke kategori yang sesuai
+            // Tambahkan rincian akun ke daftar yang sesuai
+            val neracaItem = NeracaItem(account.accountName, saldoAkhir)
             when (account.category) {
-                AccountCategory.ASET -> totalAset += saldoAkhir
-                AccountCategory.KEWAJIBAN -> totalKewajiban += saldoAkhir
-                AccountCategory.MODAL -> totalModal += saldoAkhir
-                else -> { /* Abaikan Pendapatan dan Beban untuk Neraca */ }
+                AccountCategory.ASET -> asetItems.add(neracaItem)
+                AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
+                AccountCategory.MODAL -> modalItems.add(neracaItem)
+                else -> { /* Abaikan Pendapatan dan Beban */ }
             }
         }
 
-        NeracaData(totalAset, totalKewajiban, totalModal)
+        NeracaData(
+            asetItems = asetItems,
+            kewajibanItems = kewajibanItems,
+            modalItems = modalItems,
+            totalAset = asetItems.sumOf { it.balance },
+            totalKewajiban = kewajibanItems.sumOf { it.balance },
+            totalModal = modalItems.sumOf { it.balance }
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
