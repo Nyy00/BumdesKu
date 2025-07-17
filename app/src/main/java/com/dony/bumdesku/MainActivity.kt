@@ -181,17 +181,17 @@ fun BumdesApp(
         }
 
         composable("home") {
-            // Ambil ViewModel dan profil pengguna
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory) // Ambil ViewModel ini
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle() // Ambil data kesehatan
 
             HomeScreen(
-                // ✅ Berikan nilai untuk userRole
                 userRole = userProfile?.role ?: "pengurus",
+                financialHealthData = healthData, // Kirim data kesehatan
                 onNavigate = { route -> navController.navigate(route) }
             )
         }
-
 
         composable("profile") {
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
@@ -327,10 +327,11 @@ fun BumdesApp(
         }
 
         composable("report_screen") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
+            // Ambil ViewModel yang dibutuhkan
+            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
+            // Ambil semua state yang relevan dari ViewModel
             val reportData by transactionViewModel.reportData.collectAsState()
             val reportTransactions by transactionViewModel.filteredReportTransactions.collectAsState()
             val userProfile by authViewModel.userProfile.collectAsState()
@@ -342,7 +343,7 @@ fun BumdesApp(
                 unitUsahaList = unitUsahaList,
                 userRole = userProfile?.role ?: "pengurus",
                 reportTransactions = reportTransactions,
-                allAccounts = allAccounts, // ✅ Kirimkan daftar akun
+                allAccounts = allAccounts, // ✅ Berikan daftar akun ke ReportScreen
                 onGenerateReport = { startDate, endDate, unitUsaha ->
                     transactionViewModel.generateReport(startDate, endDate, unitUsaha)
                 },

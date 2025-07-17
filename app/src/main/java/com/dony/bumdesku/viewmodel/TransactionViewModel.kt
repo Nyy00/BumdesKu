@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.*
 import com.dony.bumdesku.data.AccountCategory
 import com.dony.bumdesku.data.NeracaData
+import com.dony.bumdesku.data.FinancialHealthData
+import com.dony.bumdesku.data.HealthStatus
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
@@ -78,12 +80,10 @@ class TransactionViewModel(
     val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
 
     private val _reportFilters = MutableStateFlow<Triple<Long, Long, String?>>(Triple(0L, 0L, null))
-
     val filteredReportTransactions: StateFlow<List<Transaction>> = _reportFilters.flatMapLatest { (start, end, unitId) ->
         if (start == 0L || end == 0L) {
             flowOf(emptyList())
         } else {
-            // ✅ Ambil dari `allTransactions` yang sudah ada, lalu filter
             allTransactions.map { list ->
                 list.filter {
                     val dateMatch = it.date in start..end
@@ -134,6 +134,57 @@ class TransactionViewModel(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = NeracaData()
+    )
+
+    // ✅ --- LOGIKA BARU UNTUK KESEHATAN KEUANGAN ---
+    val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
+        // Ambil semua akun Aset Lancar (nomor diawali '11')
+        val asetLancarIds = accounts
+            .filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }
+            .map { it.id }
+
+        // Ambil semua akun Kewajiban Lancar (nomor diawali '21')
+        val kewajibanLancarIds = accounts
+            .filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }
+            .map { it.id }
+
+        // Hitung total saldo Aset Lancar
+        val totalAsetLancar = transactions.sumOf {
+            when {
+                it.debitAccountId in asetLancarIds -> it.amount
+                it.creditAccountId in asetLancarIds -> -it.amount
+                else -> 0.0
+            }
+        }
+
+        // Hitung total saldo Kewajiban Lancar
+        val totalKewajibanLancar = transactions.sumOf {
+            when {
+                it.creditAccountId in kewajibanLancarIds -> it.amount
+                it.debitAccountId in kewajibanLancarIds -> -it.amount
+                else -> 0.0
+            }
+        }
+
+        // Hitung Rasio Lancar
+        val currentRatio = if (totalKewajibanLancar > 0) {
+            (totalAsetLancar / totalKewajibanLancar).toFloat()
+        } else {
+            0f // Hindari pembagian dengan nol
+        }
+
+        // Tentukan status kesehatan
+        val status = when {
+            currentRatio >= 1.5f -> HealthStatus.SEHAT
+            currentRatio >= 1.0f -> HealthStatus.WASPADA
+            else -> HealthStatus.TIDAK_SEHAT
+        }
+
+        FinancialHealthData(currentRatio, status)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = FinancialHealthData()
     )
 
     // ✅ --- LOGIKA BARU UNTUK NERACA SALDO ---

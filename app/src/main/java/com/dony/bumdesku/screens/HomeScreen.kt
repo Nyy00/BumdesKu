@@ -15,12 +15,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dony.bumdesku.data.FinancialHealthData
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    userRole: String // Parameter untuk hak akses
+    userRole: String,
+    financialHealthData: FinancialHealthData
 ) {
     Scaffold(
         topBar = {
@@ -47,6 +49,9 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
+            FinancialHealthCard(data = financialHealthData)
+
             // --- BARIS 1 (Menu Akuntansi Inti) ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
