@@ -28,6 +28,10 @@ class TransactionRepository(
         return transactionDao.getTransactionById(id)
     }
 
+    suspend fun lockTransactionsUpTo(date: Long) {
+        transactionDao.lockTransactionsUpTo(date)
+    }
+
     // ✅ --- FUNGSI-FUNGSI INI WAJIB ADA UNTUK VIEWMODEL ---
     suspend fun getReportData(
         startDate: Long,

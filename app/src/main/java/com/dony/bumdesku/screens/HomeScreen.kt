@@ -39,7 +39,6 @@ fun HomeScreen(
             )
         }
     ) { paddingValues ->
-        // Gunakan Column dengan verticalScroll agar bisa di-scroll jika menu banyak
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -49,10 +48,45 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-
             FinancialHealthCard(data = financialHealthData)
 
-            // --- BARIS 1 (Menu Akuntansi Inti) ---
+            // --- Menu Laporan (Semua Peran) ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Assessment,
+                    title = "Laba Rugi",
+                    onClick = { onNavigate("report_screen") }
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.AccountBalance,
+                    title = "Neraca",
+                    onClick = { onNavigate("neraca_screen") }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.Balance,
+                    title = "Neraca Saldo",
+                    onClick = { onNavigate("neraca_saldo_screen") }
+                )
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.TrendingUp,
+                    title = "Perubahan Modal",
+                    onClick = { onNavigate("lpe_screen") }
+                )
+            }
+
+            // --- Menu Operasional (Semua Peran) ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -71,51 +105,8 @@ fun HomeScreen(
                 )
             }
 
-            // --- BARIS 2 (Menu Laporan) ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Assessment,
-                    title = "Laba Rugi",
-                    onClick = { onNavigate("report_screen") }
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccountBalance,
-                    title = "Neraca",
-                    onClick = { onNavigate("neraca_screen") }
-                )
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Balance,
-                    title = "Neraca Saldo",
-                    onClick = { onNavigate("neraca_saldo_screen") }
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Store,
-                    title = "Unit Usaha",
-                    onClick = { onNavigate("unit_usaha_management") }
-                )
-
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.TrendingUp, // Icon baru
-                    title = "Perubahan Modal",
-                    onClick = { onNavigate("lpe_screen") } // Rute baru
-                )
-            }
-
-            // --- BARIS 3 (Menu Khusus PENGURUS) ---
+            // --- Menu Manajemen (Hanya untuk PENGURUS) ---
             if (userRole == "pengurus") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -129,27 +120,44 @@ fun HomeScreen(
                     )
                     FeatureCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Inventory,
-                        title = "Manajemen Aset",
-                        onClick = { onNavigate("asset_list") }
+                        icon = Icons.Default.Store,
+                        title = "Unit Usaha",
+                        onClick = { onNavigate("unit_usaha_management") }
                     )
                 }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     FeatureCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.VerticalAlignBottom, // Icon baru
-                        title = "Utang Usaha",
-                        onClick = { onNavigate("payable_list") } // Rute baru
+                        icon = Icons.Default.Inventory,
+                        title = "Manajemen Aset",
+                        onClick = { onNavigate("asset_list") }
                     )
                     FeatureCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.VerticalAlignTop, // Icon baru
+                        icon = Icons.Default.Lock,
+                        title = "Kunci Jurnal",
+                        onClick = { onNavigate("lock_journal") }
+                    )
+                }
+                // ✅ --- BARIS YANG HILANG (SUDAH DIKEMBALIKAN) ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.VerticalAlignBottom,
+                        title = "Utang Usaha",
+                        onClick = { onNavigate("payable_list") }
+                    )
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.VerticalAlignTop,
                         title = "Piutang Usaha",
-                        onClick = { onNavigate("receivable_list") } // Rute baru
+                        onClick = { onNavigate("receivable_list") }
                     )
                 }
             }

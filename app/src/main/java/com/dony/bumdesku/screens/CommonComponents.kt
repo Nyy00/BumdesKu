@@ -125,49 +125,61 @@ fun DashboardCard(data: DashboardData) {
 }
 
 
-    @Composable
-    fun TransactionItem(
-        transaction: Transaction,
-        onItemClick: () -> Unit,
-        onDeleteClick: () -> Unit,
-        userRole: String
-    ) {
-        val localeID = Locale("in", "ID")
-        val currencyFormat =
-            NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
-        val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", localeID)
-        val formattedAmount = currencyFormat.format(transaction.amount)
-        val formattedDate = dateFormat.format(Date(transaction.date))
+@Composable
+fun TransactionItem(
+    transaction: Transaction,
+    onItemClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    userRole: String
+) {
+    val localeID = Locale("in", "ID")
+    val currencyFormat =
+        NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
+    val dateFormat = SimpleDateFormat("dd MMM yyyy, HH:mm", localeID)
+    val formattedAmount = currencyFormat.format(transaction.amount)
+    val formattedDate = dateFormat.format(Date(transaction.date))
 
-        Card(
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            // ✅ Bagian 1: Buat seluruh kartu tidak bisa diklik jika terkunci
+            .clickable(enabled = !transaction.isLocked) {
+                if (userRole == "pengurus") onItemClick()
+            },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable { if (userRole == "pengurus") onItemClick() },
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = transaction.description,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = formattedDate,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+            if (userRole == "pengurus") {
+                // ✅ Bagian 2: Tambahkan 'enabled' di sini
+                IconButton(
+                    onClick = onDeleteClick,
+                    enabled = !transaction.isLocked
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = transaction.description,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = formattedDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray
-                        )
-                    }
-                    if (userRole == "pengurus") {
-                        IconButton(onClick = onDeleteClick) {
-                            Icon(Icons.Default.Delete, "Hapus Transaksi", tint = Color.Gray)
-                        }
-                    }
+                    Icon(
+                        Icons.Default.Delete,
+                        "Hapus Transaksi",
+                        // Ubah warna ikon menjadi pudar jika tidak aktif
+                        tint = if (transaction.isLocked) Color.LightGray else Color.Gray
+                    )
                 }
+            }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Text(

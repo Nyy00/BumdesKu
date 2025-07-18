@@ -5,17 +5,17 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// ✅ NAIKKAN VERSI MENJADI 5 DAN TAMBAHKAN ENTITAS BARU
+// ✅ NAIKKAN VERSI MENJADI 6 DAN TAMBAHKAN ENTITAS BARU
 @Database(
     entities = [
         Transaction::class,
         UnitUsaha::class,
         Asset::class,
         Account::class,
-        Payable::class, // <-- Tambah ini
-        Receivable::class // <-- Tambah ini
+        Payable::class,
+        Receivable::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {

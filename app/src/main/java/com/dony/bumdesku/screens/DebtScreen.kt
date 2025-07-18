@@ -170,32 +170,59 @@ fun AddPayableScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Tambah Utang Baru") }, navigationIcon = {
-            IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") }
-        }) }
+        topBar = {
+            TopAppBar(title = { Text("Tambah Utang Baru") }, navigationIcon = {
+                IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") }
+            })
+        }
     ) { paddingValues ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            OutlinedTextField(value = contactName, onValueChange = { contactName = it }, label = { Text("Nama Kreditor (Pemberi Utang)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Utang") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Jumlah Utang") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = contactName,
+                onValueChange = { contactName = it },
+                label = { Text("Nama Kreditor (Pemberi Utang)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("Deskripsi Utang") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { amount = it },
+                label = { Text("Jumlah Utang") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
             Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Jatuh Tempo: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(dueDateMillis))}")
+                Text(
+                    "Jatuh Tempo: ${
+                        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(
+                            Date(dueDateMillis)
+                        )
+                    }"
+                )
             }
             Spacer(modifier = Modifier.weight(1f))
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
                     if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null) {
-                        onSave(Payable(
-                            contactName = contactName,
-                            description = description,
-                            amount = amountDouble,
-                            transactionDate = System.currentTimeMillis(),
-                            dueDate = dueDateMillis
-                        ))
+                        onSave(
+                            Payable(
+                                contactName = contactName,
+                                description = description,
+                                amount = amountDouble,
+                                transactionDate = System.currentTimeMillis(),
+                                dueDate = dueDateMillis
+                            )
+                        )
                     } else {
                         Toast.makeText(context, "Harap isi semua kolom", Toast.LENGTH_SHORT).show()
                     }
@@ -211,3 +238,66 @@ fun AddPayableScreen(
         ) { DatePicker(state = dateState) }
     }
 }
+
+    // --- Layar untuk Menambah Piutang Baru ---
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun AddReceivableScreen(
+        onSave: (Receivable) -> Unit,
+        onNavigateUp: () -> Unit
+    ) {
+        val context = LocalContext.current
+        var contactName by remember { mutableStateOf("") }
+        var description by remember { mutableStateOf("") }
+        var amount by remember { mutableStateOf("") }
+        var dueDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
+        var showDatePicker by remember { mutableStateOf(false) }
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = dueDateMillis)
+
+        LaunchedEffect(dateState.selectedDateMillis) {
+            dateState.selectedDateMillis?.let { dueDateMillis = it }
+        }
+
+        Scaffold(
+            topBar = { TopAppBar(title = { Text("Tambah Piutang Baru") }, navigationIcon = {
+                IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") }
+            }) }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(value = contactName, onValueChange = { contactName = it }, label = { Text("Nama Debitor (Yang Berutang)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Piutang") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Jumlah Piutang") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Jatuh Tempo: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(dueDateMillis))}")
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        val amountDouble = amount.toDoubleOrNull()
+                        if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null) {
+                            onSave(Receivable(
+                                contactName = contactName,
+                                description = description,
+                                amount = amountDouble,
+                                transactionDate = System.currentTimeMillis(),
+                                dueDate = dueDateMillis
+                            ))
+                        } else {
+                            Toast.makeText(context, "Harap isi semua kolom", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Simpan Piutang") }
+            }
+        }
+        if (showDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = { Button(onClick = { showDatePicker = false }) { Text("OK") } }
+            ) { DatePicker(state = dateState) }
+        }
+    }
+

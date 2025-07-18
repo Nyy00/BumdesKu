@@ -22,7 +22,8 @@ data class Transaction(
     val debitAccountName: String = "",
     val creditAccountName: String = "",
 
-    val unitUsahaId: String = ""
+    val unitUsahaId: String = "",
+    val isLocked: Boolean = false
 ) {
     // Constructor kosong wajib untuk Firestore
     constructor() : this(0, "", "", "", 0.0, 0L, "", "", "", "", "")

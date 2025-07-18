@@ -38,4 +38,7 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE unitUsahaId = :unitUsahaId AND date BETWEEN :startDate AND :endDate ORDER BY date DESC")
     fun getTransactionsByDateAndUnit(unitUsahaId: String, startDate: Long, endDate: Long): Flow<List<Transaction>>
+
+    @Query("UPDATE transactions SET isLocked = 1 WHERE date <= :date AND isLocked = 0")
+    suspend fun lockTransactionsUpTo(date: Long)
 }

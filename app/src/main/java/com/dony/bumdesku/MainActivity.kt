@@ -196,7 +196,8 @@ fun BumdesApp(
 
         composable("home") {
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory) // Ambil ViewModel ini
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory) // Ambil ViewModel ini
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle() // Ambil data kesehatan
 
@@ -287,15 +288,32 @@ fun BumdesApp(
             val transactionViewModel: TransactionViewModel =
                 viewModel(factory = transactionViewModelFactory)
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
+            val context = LocalContext.current // Ambil context untuk Toast
+
             if (transactionId != null) {
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
-                // Tampilkan layar hanya jika data sudah siap
-                transactionToEdit?.let { transaction ->
+                // LaunchedEffect digunakan agar Toast & navigasi hanya berjalan sekali
+                LaunchedEffect(transactionToEdit) {
+                    transactionToEdit?.let { transaction ->
+                        if (transaction.isLocked) {
+                            // Tampilkan pesan dan kembali jika terkunci
+                            Toast.makeText(
+                                context,
+                                "Transaksi ini sudah dikunci dan tidak bisa diubah.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            navController.popBackStack()
+                        }
+                    }
+                }
+
+                // Tampilkan layar edit hanya jika data ada DAN tidak terkunci
+                transactionToEdit?.takeIf { !it.isLocked }?.let { transaction ->
                     AddTransactionScreen(
                         viewModel = transactionViewModel,
-                        transactionToEdit = transaction, // <-- Kirim data untuk di-edit
+                        transactionToEdit = transaction,
                         onSave = { updatedTransaction ->
                             transactionViewModel.update(updatedTransaction)
                             navController.popBackStack()
@@ -342,7 +360,8 @@ fun BumdesApp(
 
         composable("report_screen") {
             // Ambil ViewModel yang dibutuhkan
-            val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val transactionViewModel: TransactionViewModel =
+                viewModel(factory = transactionViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
             // Ambil semua state yang relevan dari ViewModel
@@ -376,7 +395,8 @@ fun BumdesApp(
                 onNavigateUp = { navController.popBackStack() },
                 onAccountClick = { neracaItem ->
                     // Cari akun yang sesuai berdasarkan nama dari item neraca yang diklik
-                    val targetAccount = allAccounts.find { it.accountName == neracaItem.accountName }
+                    val targetAccount =
+                        allAccounts.find { it.accountName == neracaItem.accountName }
                     if (targetAccount != null) {
                         // Navigasi ke Buku Pembantu dengan ID akun yang ditemukan
                         navController.navigate("buku_pembantu/${targetAccount.id}")
@@ -425,45 +445,76 @@ fun BumdesApp(
             }
         }
 
-            // TAMBAHKAN RUTE NAVIGASI BARU UNTUK UTANG & PIUTANG
-            composable("payable_list") {
-                val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-                val payables by viewModel.allPayables.collectAsState(initial = emptyList())
-                PayableListScreen(
-                    payables = payables,
-                    onAddItemClick = { navController.navigate("add_payable") },
-                    onNavigateUp = { navController.popBackStack() }
-                )
-            }
-            composable("add_payable") {
-                val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-                AddPayableScreen(
-                    onSave = { payable ->
-                        viewModel.insert(payable)
-                        navController.popBackStack()
-                    },
-                    onNavigateUp = { navController.popBackStack() }
-                )
-            }
+        // TAMBAHKAN RUTE NAVIGASI BARU UNTUK UTANG & PIUTANG
+        composable("payable_list") {
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val payables by viewModel.allPayables.collectAsState(initial = emptyList())
+            PayableListScreen(
+                payables = payables,
+                onAddItemClick = { navController.navigate("add_payable") },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+        composable("add_payable") {
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            AddPayableScreen(
+                onSave = { payable ->
+                    viewModel.insert(payable)
+                    navController.popBackStack()
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
 
-            composable("lpe_screen") {
-                val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-                val lpeData by viewModel.lpeData.collectAsStateWithLifecycle()
+        composable("lpe_screen") {
+            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val lpeData by viewModel.lpeData.collectAsStateWithLifecycle()
 
-                LpeScreen(
-                    lpeData = lpeData,
-                    onGenerateLpe = { startDate, endDate ->
-                        viewModel.generateLpe(startDate, endDate)
-                    },
-                    onNavigateUp = { navController.popBackStack() }
-                )
-            }
+            LpeScreen(
+                lpeData = lpeData,
+                onGenerateLpe = { startDate, endDate ->
+                    viewModel.generateLpe(startDate, endDate)
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
 
-            composable("receivable_list") {
-                // (Implementasi untuk Piutang akan sama, bisa ditambahkan nanti)
-                // Untuk sementara, kita bisa tampilkan layar kosong atau kembali
-                navController.popBackStack()
-                Toast.makeText(context, "Fitur Piutang sedang dalam pengembangan", Toast.LENGTH_SHORT).show()
-            }
+// ✅ RUTE UNTUK MENAMPILKAN DAFTAR PIUTANG (SEKARANG AKTIF)
+        composable("receivable_list") {
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val receivables by viewModel.allReceivables.collectAsState(initial = emptyList())
+            ReceivableListScreen(
+                receivables = receivables,
+                onAddItemClick = { navController.navigate("add_receivable") }, // Arahkan ke rute tambah piutang
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+// ✅ RUTE BARU UNTUK MENAMBAH PIUTANG
+        composable("add_receivable") {
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            AddReceivableScreen(
+                onSave = { receivable ->
+                    viewModel.insert(receivable)
+                    navController.popBackStack()
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("lock_journal") {
+            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+            val context = LocalContext.current
+            LockJournalScreen(
+                onLockClick = { date ->
+                    viewModel.lockTransactionsUpTo(date) {
+                        // Beri tahu pengguna setelah selesai
+                        Toast.makeText(context, "Jurnal berhasil dikunci!", Toast.LENGTH_SHORT)
+                            .show()
+                    }
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
         }
     }
+}

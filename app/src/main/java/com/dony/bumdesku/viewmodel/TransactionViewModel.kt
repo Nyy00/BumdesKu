@@ -268,6 +268,13 @@ class TransactionViewModel(
         filterJob?.cancel()
     }
 
+    fun lockTransactionsUpTo(date: Long, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            transactionRepository.lockTransactionsUpTo(date)
+            onComplete()
+        }
+    }
+
     fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
         return allTransactions.map { transactions ->
             val filteredTx = transactions
