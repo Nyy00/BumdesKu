@@ -63,7 +63,7 @@ class MainActivity : ComponentActivity() {
         // Inisialisasi DAO, Repo, dan Factory untuk Utang/Piutang
         val debtDao = database.debtDao()
         val debtRepository = DebtRepository(debtDao)
-        val debtViewModelFactory = DebtViewModelFactory(debtRepository)
+        val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
 
         setContent {
             BumdesKuTheme {
@@ -452,9 +452,11 @@ fun BumdesApp(
             PayableListScreen(
                 payables = payables,
                 onAddItemClick = { navController.navigate("add_payable") },
-                onNavigateUp = { navController.popBackStack() }
+                onNavigateUp = { navController.popBackStack() },
+                onMarkAsPaid = { payable -> viewModel.markPayableAsPaid(payable) } // Hubungkan aksi
             )
         }
+
         composable("add_payable") {
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             AddPayableScreen(
@@ -485,8 +487,9 @@ fun BumdesApp(
             val receivables by viewModel.allReceivables.collectAsState(initial = emptyList())
             ReceivableListScreen(
                 receivables = receivables,
-                onAddItemClick = { navController.navigate("add_receivable") }, // Arahkan ke rute tambah piutang
-                onNavigateUp = { navController.popBackStack() }
+                onAddItemClick = { navController.navigate("add_receivable") },
+                onNavigateUp = { navController.popBackStack() },
+                onMarkAsPaid = { receivable -> viewModel.markReceivableAsPaid(receivable) } // Hubungkan aksi
             )
         }
 

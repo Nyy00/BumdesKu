@@ -1,16 +1,22 @@
 package com.dony.bumdesku.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.dony.bumdesku.data.Payable
-import com.dony.bumdesku.data.Receivable
+import com.dony.bumdesku.data.*
+import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.DebtRepository
+import com.dony.bumdesku.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
+class DebtViewModel(
+    private val repository: DebtRepository,
+    // Tambahkan repository baru
+    private val transactionRepository: TransactionRepository,
+    private val accountRepository: AccountRepository
+) : ViewModel() {
 
     // --- Data Utang (Payable) ---
     val allPayables: Flow<List<Payable>> = repository.allPayables
@@ -44,16 +50,50 @@ class DebtViewModel(private val repository: DebtRepository) : ViewModel() {
     fun delete(receivable: Receivable) = viewModelScope.launch {
         repository.delete(receivable)
     }
-}
 
+    fun markPayableAsPaid(payable: Payable) = viewModelScope.launch {
+        // 1. Update status utang menjadi lunas
+        repository.update(payable.copy(isPaid = true))
 
-// --- Factory untuk membuat DebtViewModel ---
-class DebtViewModelFactory(private val repository: DebtRepository) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(DebtViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return DebtViewModel(repository) as T
+        // 2. Buat jurnal otomatis
+        val allAccounts = accountRepository.allAccounts.first()
+        val kasAccount = allAccounts.find { it.accountNumber == "111" } // Asumsi Kas Tunai
+        val utangAccount = allAccounts.find { it.accountNumber == "211" } // Asumsi Utang Usaha
+
+        if (kasAccount != null && utangAccount != null) {
+            val newTransaction = Transaction(
+                description = "Pelunasan utang: ${payable.description}",
+                amount = payable.amount,
+                date = System.currentTimeMillis(),
+                debitAccountId = utangAccount.id, // Utang (debit)
+                creditAccountId = kasAccount.id, // Kas (kredit)
+                debitAccountName = utangAccount.accountName,
+                creditAccountName = kasAccount.accountName
+            )
+            transactionRepository.insert(newTransaction.copy(id = UUID.randomUUID().toString()))
         }
-        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+
+    fun markReceivableAsPaid(receivable: Receivable) = viewModelScope.launch {
+        // 1. Update status piutang menjadi lunas
+        repository.update(receivable.copy(isPaid = true))
+
+        // 2. Buat jurnal otomatis
+        val allAccounts = accountRepository.allAccounts.first()
+        val kasAccount = allAccounts.find { it.accountNumber == "111" } // Asumsi Kas Tunai
+        val piutangAccount = allAccounts.find { it.accountNumber == "113" } // Asumsi Piutang Usaha
+
+        if (kasAccount != null && piutangAccount != null) {
+            val newTransaction = Transaction(
+                description = "Pelunasan piutang: ${receivable.description}",
+                amount = receivable.amount,
+                date = System.currentTimeMillis(),
+                debitAccountId = kasAccount.id, // Kas (debit)
+                creditAccountId = piutangAccount.id, // Piutang (kredit)
+                debitAccountName = kasAccount.accountName,
+                creditAccountName = piutangAccount.accountName
+            )
+            transactionRepository.insert(newTransaction.copy(id = UUID.randomUUID().toString()))
+        }
     }
 }
