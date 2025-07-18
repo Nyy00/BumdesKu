@@ -127,6 +127,24 @@ fun HomeScreen(
                         onClick = { onNavigate("asset_list") }
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.VerticalAlignBottom, // Icon baru
+                        title = "Utang Usaha",
+                        onClick = { onNavigate("payable_list") } // Rute baru
+                    )
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.VerticalAlignTop, // Icon baru
+                        title = "Piutang Usaha",
+                        onClick = { onNavigate("receivable_list") } // Rute baru
+                    )
+                }
             }
         }
     }

@@ -5,14 +5,26 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Transaction::class, UnitUsaha::class, Asset::class, Account::class], version = 4, exportSchema = false)
+// ✅ NAIKKAN VERSI MENJADI 5 DAN TAMBAHKAN ENTITAS BARU
+@Database(
+    entities = [
+        Transaction::class,
+        UnitUsaha::class,
+        Asset::class,
+        Account::class,
+        Payable::class, // <-- Tambah ini
+        Receivable::class // <-- Tambah ini
+    ],
+    version = 5,
+    exportSchema = false
+)
 abstract class BumdesDatabase : RoomDatabase() {
 
     abstract fun transactionDao(): TransactionDao
     abstract fun unitUsahaDao(): UnitUsahaDao
     abstract fun assetDao(): AssetDao
-    // ✅ TAMBAHKAN FUNGSI ABSTRAK UNTUK DAO BARU
     abstract fun accountDao(): AccountDao
+    abstract fun debtDao(): DebtDao // <-- Tambahkan DAO baru
 
     companion object {
         @Volatile

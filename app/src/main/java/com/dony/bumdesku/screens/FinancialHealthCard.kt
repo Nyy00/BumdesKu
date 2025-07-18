@@ -30,7 +30,7 @@ fun FinancialHealthCard(data: FinancialHealthData) {
     val statusText = when(data.status) {
         HealthStatus.SEHAT -> "Sehat"
         HealthStatus.WASPADA -> "Waspada"
-        HealthStatus.TIDAK_SEHAT -> "Tidak Sehat"
+        HealthStatus.TIDAK_SEHAT -> "Perlu Perhatian"
         HealthStatus.TIDAK_TERDEFINISI -> "Data Kurang"
     }
 
@@ -57,12 +57,15 @@ fun FinancialHealthCard(data: FinancialHealthData) {
                     fontWeight = FontWeight.Bold
                 )
             }
-            Text(
-                String.format("%.2f : 1", data.currentRatio),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
+            // Tampilkan rasio hanya jika statusnya bukan "Data Kurang"
+            if (data.status != HealthStatus.TIDAK_TERDEFINISI) {
+                Text(
+                    String.format("Rasio: %.2f : 1", data.currentRatio),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

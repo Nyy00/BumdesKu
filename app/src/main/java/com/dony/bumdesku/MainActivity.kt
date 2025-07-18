@@ -24,6 +24,13 @@ import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.screens.BukuPembantuScreen
 import com.dony.bumdesku.screens.NeracaScreen
 import com.dony.bumdesku.screens.NeracaSaldoScreen
+import com.dony.bumdesku.data.DebtDao
+import com.dony.bumdesku.repository.DebtRepository
+import com.dony.bumdesku.viewmodel.DebtViewModel
+import com.dony.bumdesku.viewmodel.DebtViewModelFactory
+import com.dony.bumdesku.screens.PayableListScreen
+import com.dony.bumdesku.screens.ReceivableListScreen
+import com.dony.bumdesku.screens.AddPayableScreen
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -39,19 +46,24 @@ class MainActivity : ComponentActivity() {
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
         val assetDao = database.assetDao()
-        val accountDao = database.accountDao() // Pastikan ini sudah ada
+        val accountDao = database.accountDao()
 
         // Inisialisasi semua Repository
         val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
-        val accountRepository = AccountRepository(accountDao) // Pastikan ini sudah ada
+        val accountRepository = AccountRepository(accountDao)
 
         // Inisialisasi semua ViewModelFactory
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val authViewModelFactory = AuthViewModelFactory()
         val assetViewModelFactory = AssetViewModelFactory(assetRepository)
-        val accountViewModelFactory = AccountViewModelFactory(accountRepository) // Pastikan ini sudah ada
+        val accountViewModelFactory = AccountViewModelFactory(accountRepository)
+
+        // Inisialisasi DAO, Repo, dan Factory untuk Utang/Piutang
+        val debtDao = database.debtDao()
+        val debtRepository = DebtRepository(debtDao)
+        val debtViewModelFactory = DebtViewModelFactory(debtRepository)
 
         setContent {
             BumdesKuTheme {
@@ -60,7 +72,8 @@ class MainActivity : ComponentActivity() {
                     transactionViewModelFactory = transactionViewModelFactory,
                     authViewModelFactory = authViewModelFactory,
                     assetViewModelFactory = assetViewModelFactory,
-                    accountViewModelFactory = accountViewModelFactory
+                    accountViewModelFactory = accountViewModelFactory,
+                    debtViewModelFactory = debtViewModelFactory
                 )
             }
         }
@@ -72,7 +85,8 @@ fun BumdesApp(
     transactionViewModelFactory: TransactionViewModelFactory,
     authViewModelFactory: AuthViewModelFactory,
     assetViewModelFactory: AssetViewModelFactory,
-    accountViewModelFactory: AccountViewModelFactory // ✅ Terima parameter baru
+    accountViewModelFactory: AccountViewModelFactory,
+    debtViewModelFactory: DebtViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -410,5 +424,32 @@ fun BumdesApp(
                 }
             }
         }
+
+            // TAMBAHKAN RUTE NAVIGASI BARU UNTUK UTANG & PIUTANG
+            composable("payable_list") {
+                val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+                val payables by viewModel.allPayables.collectAsState(initial = emptyList())
+                PayableListScreen(
+                    payables = payables,
+                    onAddItemClick = { navController.navigate("add_payable") },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
+            composable("add_payable") {
+                val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+                AddPayableScreen(
+                    onSave = { payable ->
+                        viewModel.insert(payable)
+                        navController.popBackStack()
+                    },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
+            composable("receivable_list") {
+                // (Implementasi untuk Piutang akan sama, bisa ditambahkan nanti)
+                // Untuk sementara, kita bisa tampilkan layar kosong atau kembali
+                navController.popBackStack()
+                Toast.makeText(context, "Fitur Piutang sedang dalam pengembangan", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
-}
