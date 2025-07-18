@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.*
+import com.dony.bumdesku.data.LpeData
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
@@ -154,6 +155,59 @@ class TransactionViewModel(
         }
         saldoItems
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ✅ --- LOGIKA BARU UNTUK LAPORAN PERUBAHAN EKUITAS (LPE) ---
+    private val _lpeData = MutableStateFlow(LpeData())
+    val lpeData: StateFlow<LpeData> = _lpeData.asStateFlow()
+
+    fun generateLpe(startDate: Long, endDate: Long) {
+        viewModelScope.launch {
+            val allTx = allTransactions.first() // Ambil semua transaksi
+            val allAcc = _allAccounts.first() // Ambil semua akun
+
+            // 1. Hitung Laba Bersih (sama seperti di Laporan Laba Rugi)
+            val pendapatanIds = allAcc.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+            val bebanIds = allAcc.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+            val transactionsInPeriod = allTx.filter { it.date in startDate..endDate }
+            val totalPendapatan = transactionsInPeriod.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
+            val totalBeban = transactionsInPeriod.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
+            val labaBersih = totalPendapatan - totalBeban
+
+            // 2. Hitung Total Prive
+            val priveAccountId = allAcc.find { it.accountNumber == "312" }?.id
+            val totalPrive = if (priveAccountId != null) {
+                transactionsInPeriod.filter { it.debitAccountId == priveAccountId }.sumOf { it.amount }
+            } else {
+                0.0
+            }
+
+            // 3. Hitung Modal Awal (Saldo Akun Modal SEBELUM periode dimulai)
+            val modalIds = allAcc.filter { it.category == AccountCategory.MODAL }.map { it.id }
+            val transactionsBeforePeriod = allTx.filter { it.date < startDate }
+            val modalAwal = transactionsBeforePeriod.sumOf {
+                when {
+                    it.creditAccountId in modalIds -> it.amount
+                    it.debitAccountId in modalIds -> -it.amount
+                    else -> 0.0
+                }
+            }
+
+            val modalAkhir = modalAwal + labaBersih - totalPrive
+
+            _lpeData.value = LpeData(
+                modalAwal = modalAwal,
+                labaBersih = labaBersih,
+                prive = totalPrive,
+                modalAkhir = modalAkhir,
+                isGenerated = true
+            )
+        }
+    }
+
+    fun clearLpe() {
+        _lpeData.value = LpeData()
+    }
+
 
     // --- Logika Laporan ---
     private val _reportData = MutableStateFlow(ReportData())

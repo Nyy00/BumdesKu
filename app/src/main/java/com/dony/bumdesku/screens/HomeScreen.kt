@@ -106,6 +106,13 @@ fun HomeScreen(
                     title = "Unit Usaha",
                     onClick = { onNavigate("unit_usaha_management") }
                 )
+
+                FeatureCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Default.TrendingUp, // Icon baru
+                    title = "Perubahan Modal",
+                    onClick = { onNavigate("lpe_screen") } // Rute baru
+                )
             }
 
             // --- BARIS 3 (Menu Khusus PENGURUS) ---

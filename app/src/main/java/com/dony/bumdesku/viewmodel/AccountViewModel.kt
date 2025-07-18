@@ -40,6 +40,8 @@ class AccountViewModel(private val repository: AccountRepository) : ViewModel() 
 
                     // --- MODAL (Awalan 3xx) ---
                     Account(accountNumber = "311", accountName = "Modal Disetor", category = AccountCategory.MODAL),
+                    Account(accountNumber = "312", accountName = "Prive", category = AccountCategory.MODAL),
+
 
                     // --- PENDAPATAN (Awalan 4xx) ---
                     Account(accountNumber = "411", accountName = "Pendapatan Jasa", category = AccountCategory.PENDAPATAN),

@@ -445,6 +445,20 @@ fun BumdesApp(
                     onNavigateUp = { navController.popBackStack() }
                 )
             }
+
+            composable("lpe_screen") {
+                val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+                val lpeData by viewModel.lpeData.collectAsStateWithLifecycle()
+
+                LpeScreen(
+                    lpeData = lpeData,
+                    onGenerateLpe = { startDate, endDate ->
+                        viewModel.generateLpe(startDate, endDate)
+                    },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
+
             composable("receivable_list") {
                 // (Implementasi untuk Piutang akan sama, bisa ditambahkan nanti)
                 // Untuk sementara, kita bisa tampilkan layar kosong atau kembali
