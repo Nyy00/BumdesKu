@@ -18,19 +18,10 @@ import androidx.navigation.navArgument
 import com.dony.bumdesku.data.*
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.AssetRepository
+import com.dony.bumdesku.repository.DebtRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.screens.*
-import com.dony.bumdesku.screens.BukuPembantuScreen
-import com.dony.bumdesku.screens.NeracaScreen
-import com.dony.bumdesku.screens.NeracaSaldoScreen
-import com.dony.bumdesku.data.DebtDao
-import com.dony.bumdesku.repository.DebtRepository
-import com.dony.bumdesku.viewmodel.DebtViewModel
-import com.dony.bumdesku.viewmodel.DebtViewModelFactory
-import com.dony.bumdesku.screens.PayableListScreen
-import com.dony.bumdesku.screens.ReceivableListScreen
-import com.dony.bumdesku.screens.AddPayableScreen
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -40,45 +31,60 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val database = BumdesDatabase.getDatabase(this)
 
-        // Inisialisasi semua DAO
+        // Inisialisasi semua dependensi di sini
+        val database = BumdesDatabase.getDatabase(this)
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
         val assetDao = database.assetDao()
         val accountDao = database.accountDao()
+        val debtDao = database.debtDao()
 
-        // Inisialisasi semua Repository
-        val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao)
+        // Buat instance dari semua repository
+        val accountRepository = AccountRepository(accountDao)
+        val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao, accountRepository)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
-        val accountRepository = AccountRepository(accountDao)
+        val debtRepository = DebtRepository(debtDao)
 
-        // Inisialisasi semua ViewModelFactory
+        // Buat semua ViewModelFactory
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val authViewModelFactory = AuthViewModelFactory()
         val assetViewModelFactory = AssetViewModelFactory(assetRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
-
-        // Inisialisasi DAO, Repo, dan Factory untuk Utang/Piutang
-        val debtDao = database.debtDao()
-        val debtRepository = DebtRepository(debtDao)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
 
         setContent {
             BumdesKuTheme {
-                // ✅ Berikan factory yang baru ke BumdesApp
+                // Kirim semua instance yang dibutuhkan ke BumdesApp
                 BumdesApp(
                     transactionViewModelFactory = transactionViewModelFactory,
                     authViewModelFactory = authViewModelFactory,
                     assetViewModelFactory = assetViewModelFactory,
                     accountViewModelFactory = accountViewModelFactory,
-                    debtViewModelFactory = debtViewModelFactory
+                    debtViewModelFactory = debtViewModelFactory,
+                    // Kirim repository untuk pemicu sinkronisasi
+                    repositories = AppRepositories(
+                        unitUsaha = unitUsahaRepository,
+                        asset = assetRepository,
+                        account = accountRepository,
+                        transaction = transactionRepository,
+                        debt = debtRepository
+                    )
                 )
             }
         }
     }
 }
+
+// Data class untuk membungkus semua repository agar lebih rapi
+data class AppRepositories(
+    val unitUsaha: UnitUsahaRepository,
+    val asset: AssetRepository,
+    val account: AccountRepository,
+    val transaction: TransactionRepository,
+    val debt: DebtRepository
+)
 
 @Composable
 fun BumdesApp(
@@ -86,17 +92,59 @@ fun BumdesApp(
     authViewModelFactory: AuthViewModelFactory,
     assetViewModelFactory: AssetViewModelFactory,
     accountViewModelFactory: AccountViewModelFactory,
-    debtViewModelFactory: DebtViewModelFactory
+    debtViewModelFactory: DebtViewModelFactory,
+    repositories: AppRepositories // Terima semua repository
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
     val context = LocalContext.current
 
+    // Inisialisasi ViewModel yang akan dibagikan ke beberapa layar
+    val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+    val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+
+    // ✅ PEMICU SINKRONISASI UTAMA
+    // Blok ini akan berjalan setiap kali status login berubah.
+    val targetUserId by authViewModel.targetUserId.collectAsStateWithLifecycle()
+    LaunchedEffect(targetUserId) {
+        if (targetUserId != null) {
+            // Panggil fungsi sinkronisasi dari SEMUA repository dengan targetId yang benar
+            repositories.unitUsaha.syncUnitUsaha(targetUserId!!)
+            repositories.asset.syncAssets(targetUserId!!)
+            repositories.account.syncAccounts(targetUserId!!)
+            repositories.transaction.syncTransactions(targetUserId!!)
+            repositories.debt.syncPayables(targetUserId!!)
+            repositories.debt.syncReceivables(targetUserId!!)
+        }
+    }
+
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
     NavHost(navController = navController, startDestination = startDestination) {
+
+        composable("home") {
+            // ✅ PERBAIKAN DI SINI: Tambahkan baris ini
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle()
+
+            HomeScreen(
+                userRole = userProfile?.role ?: "pengurus",
+                financialHealthData = healthData,
+                onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+        composable("unit_usaha_management") {
+            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+            UnitUsahaManagementScreen(
+                unitUsahaList = unitUsahaList,
+                onAddUnitUsaha = { unitName -> transactionViewModel.insert(UnitUsaha(name = unitName)) },
+                onDeleteUnitUsaha = { unitUsaha -> transactionViewModel.delete(unitUsaha) },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        // ... (Sisa NavHost Anda)
         composable("login") {
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
 
@@ -156,7 +204,6 @@ fun BumdesApp(
 
 
         composable("register") {
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
 
@@ -194,22 +241,7 @@ fun BumdesApp(
             }
         }
 
-        composable("home") {
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory) // Ambil ViewModel ini
-            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
-            val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle() // Ambil data kesehatan
-
-            HomeScreen(
-                userRole = userProfile?.role ?: "pengurus",
-                financialHealthData = healthData, // Kirim data kesehatan
-                onNavigate = { route -> navController.navigate(route) }
-            )
-        }
-
         composable("profile") {
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val localContext = LocalContext.current
 
@@ -236,9 +268,6 @@ fun BumdesApp(
 
         // ✅ INI VERSI YANG BENAR DAN LENGKAP (yang duplikat sudah dihapus)
         composable("transaction_list") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
             // Ambil data yang dibutuhkan, termasuk searchQuery
             val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle()
@@ -269,8 +298,6 @@ fun BumdesApp(
         }
 
         composable("add_transaction") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
             AddTransactionScreen(
                 viewModel = transactionViewModel,
                 onSave = { transaction ->
@@ -285,10 +312,8 @@ fun BumdesApp(
             "edit_transaction/{transactionId}",
             arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
         ) { backStackEntry ->
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
             val transactionId = backStackEntry.arguments?.getInt("transactionId")
-            val context = LocalContext.current // Ambil context untuk Toast
+            val localContext = LocalContext.current // Ambil context untuk Toast
 
             if (transactionId != null) {
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
@@ -300,7 +325,7 @@ fun BumdesApp(
                         if (transaction.isLocked) {
                             // Tampilkan pesan dan kembali jika terkunci
                             Toast.makeText(
-                                context,
+                                localContext,
                                 "Transaksi ini sudah dikunci dan tidak bisa diubah.",
                                 Toast.LENGTH_LONG
                             ).show()
@@ -344,25 +369,7 @@ fun BumdesApp(
             )
         }
 
-        composable("unit_usaha_management") {
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
-            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(
-                emptyList()
-            )
-            UnitUsahaManagementScreen(
-                unitUsahaList = unitUsahaList,
-                onAddUnitUsaha = { unitName -> transactionViewModel.insert(UnitUsaha(name = unitName)) },
-                onDeleteUnitUsaha = { unitUsaha -> transactionViewModel.delete(unitUsaha) },
-                onNavigateUp = { navController.popBackStack() }
-            )
-        }
-
         composable("report_screen") {
-            // Ambil ViewModel yang dibutuhkan
-            val transactionViewModel: TransactionViewModel =
-                viewModel(factory = transactionViewModelFactory)
-            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
 
             // Ambil semua state yang relevan dari ViewModel
             val reportData by transactionViewModel.reportData.collectAsState()
@@ -386,9 +393,8 @@ fun BumdesApp(
 
 
         composable("neraca_screen") {
-            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val neracaData by viewModel.neracaData.collectAsStateWithLifecycle()
-            val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList()) // Ambil semua akun
+            val neracaData by transactionViewModel.neracaData.collectAsStateWithLifecycle()
+            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList()) // Ambil semua akun
 
             NeracaScreen(
                 neracaData = neracaData,
@@ -406,8 +412,7 @@ fun BumdesApp(
         }
 
         composable("neraca_saldo_screen") {
-            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val neracaSaldoItems by viewModel.neracaSaldoItems.collectAsStateWithLifecycle()
+            val neracaSaldoItems by transactionViewModel.neracaSaldoItems.collectAsStateWithLifecycle()
 
             NeracaSaldoScreen(
                 items = neracaSaldoItems,
@@ -422,14 +427,12 @@ fun BumdesApp(
         ) { backStackEntry ->
             val accountId = backStackEntry.arguments?.getString("accountId")
             if (accountId != null) {
-                val viewModel: TransactionViewModel =
-                    viewModel(factory = transactionViewModelFactory)
-                val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList())
+                val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList())
 
                 val selectedAccount = allAccounts.find { it.id == accountId }
 
                 if (selectedAccount != null) {
-                    val bukuPembantuData by viewModel.getBukuPembantuData(
+                    val bukuPembantuData by transactionViewModel.getBukuPembantuData(
                         accountId,
                         selectedAccount.category
                     )
@@ -469,13 +472,14 @@ fun BumdesApp(
         }
 
         composable("lpe_screen") {
-            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val lpeData by viewModel.lpeData.collectAsStateWithLifecycle()
+            // Ambil lpeData dari transactionViewModel yang sudah ada
+            val lpeData by transactionViewModel.lpeData.collectAsStateWithLifecycle()
 
             LpeScreen(
                 lpeData = lpeData,
                 onGenerateLpe = { startDate, endDate ->
-                    viewModel.generateLpe(startDate, endDate)
+                    // ✅ PERBAIKAN: Gunakan 'transactionViewModel' bukan 'viewModel'
+                    transactionViewModel.generateLpe(startDate, endDate)
                 },
                 onNavigateUp = { navController.popBackStack() }
             )
@@ -506,13 +510,12 @@ fun BumdesApp(
         }
 
         composable("lock_journal") {
-            val viewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-            val context = LocalContext.current
+            val localContext = LocalContext.current
             LockJournalScreen(
                 onLockClick = { date ->
-                    viewModel.lockTransactionsUpTo(date) {
+                    transactionViewModel.lockTransactionsUpTo(date) {
                         // Beri tahu pengguna setelah selesai
-                        Toast.makeText(context, "Jurnal berhasil dikunci!", Toast.LENGTH_SHORT)
+                        Toast.makeText(localContext, "Jurnal berhasil dikunci!", Toast.LENGTH_SHORT)
                             .show()
                     }
                 },

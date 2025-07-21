@@ -48,7 +48,7 @@ class TransactionViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // --- [PERBAIKAN UTAMA #1] KALKULASI DATA DASHBOARD YANG REAKTIF ---
+    // --- KALKULASI DATA DASHBOARD YANG REAKTIF ---
     val dashboardData: StateFlow<DashboardData> = combine(allAccounts, allTransactions) { accounts, transactions ->
         if (accounts.isEmpty()) {
             DashboardData()
@@ -63,7 +63,6 @@ class TransactionViewModel(
 
     val chartData: StateFlow<ChartData> = combine(allAccounts, allTransactions) { accounts, transactions ->
         if (accounts.isEmpty()) ChartData() else {
-            // Logika kalkulasi grafik Anda di sini...
             val calendar = Calendar.getInstance()
             val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des")
             val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
@@ -87,15 +86,13 @@ class TransactionViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChartData())
 
 
-    // --- [PERBAIKAN UTAMA #2] LOGIKA LAPORAN KEUANGAN YANG SEPENUHNYA REAKTIF ---
+    // --- LOGIKA LAPORAN KEUANGAN ---
     private val _reportFilters = MutableStateFlow<ReportFilters?>(null)
 
-    // Fungsi ini sekarang hanya bertugas mengubah filter
     fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
         _reportFilters.value = ReportFilters(startDate, endDate, unitUsaha, System.currentTimeMillis())
     }
 
-    // `reportData` sekarang akan otomatis menghitung ulang jika filter, akun, atau transaksi berubah
     val reportData: StateFlow<ReportData> = combine(
         _reportFilters, allAccounts, allTransactions
     ) { filters, accounts, transactions ->
@@ -126,7 +123,6 @@ class TransactionViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReportData())
 
-    // `filteredReportTransactions` juga menjadi reaktif
     val filteredReportTransactions: StateFlow<List<Transaction>> = reportData.map { data ->
         if (!data.isGenerated) {
             emptyList()
@@ -142,8 +138,7 @@ class TransactionViewModel(
         _reportFilters.value = null
     }
 
-    // --- FUNGSI-FUNGSI LAIN (TIDAK BERUBAH SECARA SIGNIFIKAN) ---
-    // (Neraca, LPE, CRUD, dll. tetap di sini)
+    // --- FUNGSI-FUNGSI LAIN ---
     val neracaData: StateFlow<NeracaData> = combine(allTransactions, allAccounts) { transactions, accounts ->
         val asetItems = mutableListOf<NeracaItem>()
         val kewajibanItems = mutableListOf<NeracaItem>()
@@ -177,23 +172,30 @@ class TransactionViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NeracaData())
 
+    // ✅ PERBAIKAN LOGIKA FINANCIAL HEALTH DI SINI
     val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, allAccounts) { transactions, accounts ->
-        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && (it.accountNumber.startsWith("11") || it.accountNumber.startsWith("1-1")) }.map { it.id }
-        val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && (it.accountNumber.startsWith("21") || it.accountNumber.startsWith("2-1")) }.map { it.id }
+        // Identifikasi akun aset lancar (nomor akun berawalan "11")
+        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }.map { it.id }
 
+        // Identifikasi akun kewajiban lancar (nomor akun berawalan "21")
+        val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }.map { it.id }
+
+        // Hitung total saldo Aset Lancar
         val totalAsetLancar = accounts.filter { it.id in asetLancarIds }.sumOf { acc ->
             val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
             val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
-            totalDebit - totalKredit
+            totalDebit - totalKredit // Saldo normal Aset adalah Debit
         }
 
+        // Hitung total saldo Kewajiban Lancar
         val totalKewajibanLancar = accounts.filter { it.id in kewajibanLancarIds }.sumOf { acc ->
             val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
             val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
-            totalKredit - totalDebit
+            totalKredit - totalDebit // Saldo normal Kewajiban adalah Kredit
         }
 
         val currentRatio = if (totalKewajibanLancar > 0) (totalAsetLancar / totalKewajibanLancar).toFloat() else 0f
+
         val status = when {
             totalAsetLancar == 0.0 && totalKewajibanLancar == 0.0 -> HealthStatus.TIDAK_TERDEFINISI
             currentRatio >= 1.5f -> HealthStatus.SEHAT

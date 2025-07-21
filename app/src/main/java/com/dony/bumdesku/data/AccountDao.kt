@@ -16,4 +16,11 @@ interface AccountDao {
 
     @Query("SELECT * FROM accounts ORDER BY accountNumber ASC")
     fun getAllAccounts(): Flow<List<Account>>
+
+    // Fungsi-fungsi yang ditambahkan
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(accounts: List<Account>)
+
+    @Query("DELETE FROM accounts")
+    suspend fun deleteAll()
 }

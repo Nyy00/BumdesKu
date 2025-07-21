@@ -12,13 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-// Enum untuk merepresentasikan state dari proses otentikasi
-// PASTIKAN INI BERADA DI LUAR CLASS
 enum class AuthState {
-    IDLE,       // Keadaan awal
-    LOADING,    // Sedang dalam proses
-    SUCCESS,    // Berhasil
-    ERROR       // Terjadi kesalahan
+    IDLE, LOADING, SUCCESS, ERROR
 }
 
 class AuthViewModel : ViewModel() {
@@ -35,10 +30,14 @@ class AuthViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage
 
+    // ✅ STATEFLOW BARU UNTUK MENENTUKAN TARGET PENGGUNA
+    private val _targetUserId = MutableStateFlow<String?>(null)
+    val targetUserId: StateFlow<String?> = _targetUserId
+
     init {
-        // Saat ViewModel dibuat, langsung cek apakah ada pengguna yang sudah login
-        // Jika ada, ambil profilnya.
-        auth.currentUser?.uid?.let { fetchUserProfile(it) }
+        auth.currentUser?.uid?.let {
+            fetchUserProfile(it)
+        }
     }
 
     private fun fetchUserProfile(userId: String) {
@@ -47,9 +46,27 @@ class AuthViewModel : ViewModel() {
                 val snapshot = firestore.collection("users").document(userId).get().await()
                 val profile = snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
                 _userProfile.value = profile
+
+                // ✅ LOGIKA BARU: TENTUKAN TARGET USER ID SETELAH PROFIL DIDAPATKAN
+                determineTargetUserId(profile)
+
             } catch (e: Exception) {
-                // Gagal mengambil profil, mungkin karena offline
                 _errorMessage.value = "Gagal memuat profil pengguna."
+                _targetUserId.value = null // Reset jika gagal
+            }
+        }
+    }
+
+    // ✅ FUNGSI BANTUAN BARU
+    private fun determineTargetUserId(profile: UserProfile?) {
+        viewModelScope.launch {
+            if (profile?.role == "auditor") {
+                // Jika auditor, cari userId milik pengurus
+                val pengurusQuery = firestore.collection("users").whereEqualTo("role", "pengurus").limit(1).get().await()
+                _targetUserId.value = pengurusQuery.documents.firstOrNull()?.id
+            } else {
+                // Jika pengurus atau peran lain, gunakan ID sendiri
+                _targetUserId.value = profile?.uid
             }
         }
     }
@@ -58,19 +75,16 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _authState.value = AuthState.LOADING
             try {
-                // 1. Buat pengguna di Firebase Authentication
                 val result = auth.createUserWithEmailAndPassword(email, pass).await()
                 val userId = result.user?.uid
 
                 if (userId != null) {
-                    // 2. Buat dokumen profil untuk pengguna di Firestore
-                    val userProfile = hashMapOf(
-                        "email" to email,
-                        "role" to "pengurus" // Peran default saat mendaftar
+                    val userProfile = UserProfile(
+                        email = email,
+                        role = if (email.contains("auditor")) "auditor" else "pengurus" // Otomatisasi peran
                     )
                     firestore.collection("users").document(userId).set(userProfile).await()
                 }
-
                 _authState.value = AuthState.SUCCESS
             } catch (e: Exception) {
                 _errorMessage.value = e.message
@@ -84,7 +98,6 @@ class AuthViewModel : ViewModel() {
             _authState.value = AuthState.LOADING
             try {
                 val result = auth.signInWithEmailAndPassword(email, pass).await()
-                // Setelah berhasil login, ambil profilnya
                 result.user?.uid?.let { fetchUserProfile(it) }
                 _authState.value = AuthState.SUCCESS
             } catch (e: Exception) {
@@ -113,9 +126,9 @@ class AuthViewModel : ViewModel() {
     fun logout() {
         auth.signOut()
         _userProfile.value = null
+        _targetUserId.value = null // Reset target saat logout
     }
 
-    // Fungsi untuk mereset state setelah proses selesai
     fun resetAuthState() {
         _authState.value = AuthState.IDLE
         _errorMessage.value = null

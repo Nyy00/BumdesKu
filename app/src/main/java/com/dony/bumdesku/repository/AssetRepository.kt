@@ -23,17 +23,10 @@ class AssetRepository(private val assetDao: AssetDao) {
     private val auth = Firebase.auth
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    // Tetap mengambil data dari Room untuk ditampilkan di UI
     val allAssets: Flow<List<Asset>> = assetDao.getAllAssets()
 
-    init {
-        // Panggil fungsi sinkronisasi saat repository dibuat
-        syncAssets()
-    }
-
-    private fun syncAssets() {
-        val userId = auth.currentUser?.uid ?: return
-        firestore.collection("assets").whereEqualTo("userId", userId)
+    fun syncAssets(targetUserId: String) {
+        firestore.collection("assets").whereEqualTo("userId", targetUserId)
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
                     Log.w("AssetRepository", "Listen failed.", e)
@@ -44,60 +37,50 @@ class AssetRepository(private val assetDao: AssetDao) {
                     val firestoreAssets = snapshots?.mapNotNull { doc ->
                         doc.toObject<Asset>().apply { id = doc.id }
                     } ?: emptyList()
-
-                    // Hapus cache lama dan masukkan data baru dari firestore
                     assetDao.deleteAll()
                     assetDao.insertAll(firestoreAssets)
                 }
             }
     }
 
+    // ... sisa kode (insert, update, delete, dll.) tetap sama
     fun getAssetById(id: Int): Flow<Asset?> {
         return assetDao.getAssetById(id)
     }
-
-    // --- FUNGSI CRUD YANG DIPERBARUI ---
 
     suspend fun insert(asset: Asset, imageUri: Uri?) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
         var imageUrl = ""
 
-        // 1. Upload gambar jika ada, dan dapatkan URL-nya
         if (imageUri != null) {
             try {
                 imageUrl = uploadAssetImage(imageUri)
             } catch (e: Exception) {
                 Log.e("AssetRepository", "Image upload failed", e)
-                throw e // Lemparkan error agar ViewModel bisa menangani
+                throw e
             }
         }
 
-        // 2. Siapkan objek asset dengan userId dan imageUrl
         val newAsset = asset.copy(
             userId = userId,
             imageUrl = imageUrl
         )
 
-        // 3. Simpan data aset ke Firestore
         val docRef = firestore.collection("assets").add(newAsset).await()
-        Log.d("AssetRepository", "Asset saved to Firestore with ID: ${docRef.id}")
-        // Catatan: Data akan otomatis tersinkronisasi ke Room melalui listener
+        update(newAsset.copy(id = docRef.id))
     }
 
     suspend fun update(asset: Asset) {
         if (asset.id.isBlank()) return
         firestore.collection("assets").document(asset.id).set(asset).await()
-        // Data akan otomatis tersinkronisasi ke Room
     }
 
     suspend fun delete(asset: Asset) {
         if (asset.id.isNotBlank()) {
             firestore.collection("assets").document(asset.id).delete().await()
         }
-        // Data akan otomatis tersinkronisasi ke Room
     }
 
-    // Fungsi upload gambar (kita pindahkan dari ViewModel sebelumnya)
     private suspend fun uploadAssetImage(imageUri: Uri): String {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
         val fileName = "asset_${UUID.randomUUID()}.jpg"

@@ -20,7 +20,14 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY date DESC")
     fun getAllTransactions(): Flow<List<Transaction>>
 
-    // ✅ --- QUERY-QUERY INI WAJIB ADA UNTUK FILTER LAPORAN ---
+    // Fungsi-fungsi yang ditambahkan
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(transactions: List<Transaction>)
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
+
+    // Query-query lain tetap ada...
     @Query("SELECT SUM(amount) FROM transactions WHERE creditAccountId IN (:accountIds) AND date BETWEEN :startDate AND :endDate")
     suspend fun getCreditTotalByDateRange(accountIds: List<String>, startDate: Long, endDate: Long): Double?
 
