@@ -1,10 +1,8 @@
 package com.dony.bumdesku.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.*
-import com.dony.bumdesku.data.LpeData
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
@@ -20,6 +18,14 @@ data class ChartData(
     val monthlyExpenses: Map<String, Float> = emptyMap()
 )
 
+// Data class untuk menampung filter laporan
+private data class ReportFilters(
+    val startDate: Long,
+    val endDate: Long,
+    val unitUsaha: UnitUsaha? = null,
+    val trigger: Long = 0L // Pemicu untuk generate laporan
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class TransactionViewModel(
     private val transactionRepository: TransactionRepository,
@@ -27,60 +33,118 @@ class TransactionViewModel(
     private val accountRepository: AccountRepository
 ) : ViewModel() {
 
-    // --- State untuk UI ---
+    // --- ALIRAN DATA MENTAH DARI REPOSITORY ---
+    val allAccounts: Flow<List<Account>> = accountRepository.allAccounts
+    val allUnitUsaha: Flow<List<UnitUsaha>> = unitUsahaRepository.allUnitUsaha
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _allAccounts = accountRepository.allAccounts.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val allAccounts: Flow<List<Account>> = _allAccounts
-
-    val allUnitUsaha: Flow<List<UnitUsaha>> = unitUsahaRepository.allUnitUsaha
-
-    // --- Alur Data Utama ---
+    // --- ALIRAN DATA TRANSAKSI (dengan filter pencarian) ---
     val allTransactions: StateFlow<List<Transaction>> = _searchQuery.flatMapLatest { query ->
         transactionRepository.allTransactions.map { list ->
             if (query.isBlank()) list else list.filter {
-                it.description.contains(query, ignoreCase = true) ||
-                        it.debitAccountName.contains(query, ignoreCase = true) ||
-                        it.creditAccountName.contains(query, ignoreCase = true)
+                it.description.contains(query, ignoreCase = true)
             }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // --- Data Kalkulasi Otomatis ---
-    val dashboardData: StateFlow<DashboardData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
-        val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
-        val totalIncome = transactions.filter { it.creditAccountId in pendapatanAccountIds }.sumOf { it.amount }
-        val totalExpenses = transactions.filter { it.debitAccountId in bebanAccountIds }.sumOf { it.amount }
-        DashboardData(totalIncome, totalExpenses, totalIncome - totalExpenses)
+    // --- [PERBAIKAN UTAMA #1] KALKULASI DATA DASHBOARD YANG REAKTIF ---
+    val dashboardData: StateFlow<DashboardData> = combine(allAccounts, allTransactions) { accounts, transactions ->
+        if (accounts.isEmpty()) {
+            DashboardData()
+        } else {
+            val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+            val bebanIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+            val totalIncome = transactions.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
+            val totalExpenses = transactions.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
+            DashboardData(totalIncome, totalExpenses, totalIncome - totalExpenses)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardData())
 
-    val chartData: StateFlow<ChartData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        val calendar = Calendar.getInstance()
-        val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des")
-        val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
-        val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
-        val incomeByMonth = transactions
-            .filter { it.creditAccountId in pendapatanAccountIds }
-            .groupBy { calendar.apply { timeInMillis = it.date }.get(Calendar.MONTH) }
-            .mapValues { it.value.sumOf { tx -> tx.amount }.toFloat() }
-        val expensesByMonth = transactions
-            .filter { it.debitAccountId in bebanAccountIds }
-            .groupBy { calendar.apply { timeInMillis = it.date }.get(Calendar.MONTH) }
-            .mapValues { it.value.sumOf { tx -> tx.amount }.toFloat() }
-        val allMonthIndexes = (incomeByMonth.keys + expensesByMonth.keys).distinct().sorted()
-        val finalIncome = LinkedHashMap<String, Float>()
-        val finalExpenses = LinkedHashMap<String, Float>()
-        for (index in allMonthIndexes) {
-            val monthName = monthNames[index]
-            finalIncome[monthName] = incomeByMonth[index] ?: 0f
-            finalExpenses[monthName] = expensesByMonth[index] ?: 0f
+    val chartData: StateFlow<ChartData> = combine(allAccounts, allTransactions) { accounts, transactions ->
+        if (accounts.isEmpty()) ChartData() else {
+            // Logika kalkulasi grafik Anda di sini...
+            val calendar = Calendar.getInstance()
+            val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des")
+            val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+            val bebanIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+            val incomeByMonth = transactions.filter { it.creditAccountId in pendapatanIds }
+                .groupBy { calendar.apply { timeInMillis = it.date }.get(Calendar.MONTH) }
+                .mapValues { it.value.sumOf { tx -> tx.amount }.toFloat() }
+            val expensesByMonth = transactions.filter { it.debitAccountId in bebanIds }
+                .groupBy { calendar.apply { timeInMillis = it.date }.get(Calendar.MONTH) }
+                .mapValues { it.value.sumOf { tx -> tx.amount }.toFloat() }
+            val allMonthIndexes = (incomeByMonth.keys + expensesByMonth.keys).distinct().sorted()
+            val finalIncome = LinkedHashMap<String, Float>()
+            val finalExpenses = LinkedHashMap<String, Float>()
+            for (index in allMonthIndexes) {
+                val monthName = monthNames[index]
+                finalIncome[monthName] = incomeByMonth[index] ?: 0f
+                finalExpenses[monthName] = expensesByMonth[index] ?: 0f
+            }
+            ChartData(finalIncome, finalExpenses)
         }
-        ChartData(finalIncome, finalExpenses)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ChartData())
 
-    val neracaData: StateFlow<NeracaData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
+
+    // --- [PERBAIKAN UTAMA #2] LOGIKA LAPORAN KEUANGAN YANG SEPENUHNYA REAKTIF ---
+    private val _reportFilters = MutableStateFlow<ReportFilters?>(null)
+
+    // Fungsi ini sekarang hanya bertugas mengubah filter
+    fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
+        _reportFilters.value = ReportFilters(startDate, endDate, unitUsaha, System.currentTimeMillis())
+    }
+
+    // `reportData` sekarang akan otomatis menghitung ulang jika filter, akun, atau transaksi berubah
+    val reportData: StateFlow<ReportData> = combine(
+        _reportFilters, allAccounts, allTransactions
+    ) { filters, accounts, transactions ->
+        if (filters == null || accounts.isEmpty()) {
+            return@combine ReportData(isGenerated = false)
+        }
+
+        val filteredTransactions = transactions.filter { tx ->
+            val unitMatch = filters.unitUsaha == null || tx.unitUsahaId == filters.unitUsaha.id
+            tx.date in filters.startDate..filters.endDate && unitMatch
+        }
+
+        val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+        val bebanIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+
+        val totalIncome = filteredTransactions.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
+        val totalExpenses = filteredTransactions.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
+
+        ReportData(
+            totalIncome = totalIncome,
+            totalExpenses = totalExpenses,
+            netProfit = totalIncome - totalExpenses,
+            isGenerated = true,
+            startDate = filters.startDate,
+            endDate = filters.endDate,
+            unitUsahaName = filters.unitUsaha?.name ?: "Semua Unit Usaha",
+            unitUsahaId = filters.unitUsaha?.id
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ReportData())
+
+    // `filteredReportTransactions` juga menjadi reaktif
+    val filteredReportTransactions: StateFlow<List<Transaction>> = reportData.map { data ->
+        if (!data.isGenerated) {
+            emptyList()
+        } else {
+            allTransactions.value.filter { tx ->
+                val unitMatch = data.unitUsahaId == null || tx.unitUsahaId == data.unitUsahaId
+                tx.date in data.startDate..data.endDate && unitMatch
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun clearReport() {
+        _reportFilters.value = null
+    }
+
+    // --- FUNGSI-FUNGSI LAIN (TIDAK BERUBAH SECARA SIGNIFIKAN) ---
+    // (Neraca, LPE, CRUD, dll. tetap di sini)
+    val neracaData: StateFlow<NeracaData> = combine(allTransactions, allAccounts) { transactions, accounts ->
         val asetItems = mutableListOf<NeracaItem>()
         val kewajibanItems = mutableListOf<NeracaItem>()
         val modalItems = mutableListOf<NeracaItem>()
@@ -93,12 +157,14 @@ class TransactionViewModel(
                 AccountCategory.ASET, AccountCategory.BEBAN -> totalDebit - totalKredit
                 else -> totalKredit - totalDebit
             }
-            val neracaItem = NeracaItem(account.accountName, saldoAkhir)
-            when (account.category) {
-                AccountCategory.ASET -> asetItems.add(neracaItem)
-                AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
-                AccountCategory.MODAL -> modalItems.add(neracaItem)
-                else -> {}
+            if(saldoAkhir != 0.0) {
+                val neracaItem = NeracaItem(account.accountName, saldoAkhir)
+                when (account.category) {
+                    AccountCategory.ASET -> asetItems.add(neracaItem)
+                    AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
+                    AccountCategory.MODAL -> modalItems.add(neracaItem)
+                    else -> {}
+                }
             }
         }
         NeracaData(
@@ -111,25 +177,25 @@ class TransactionViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NeracaData())
 
-    val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, _allAccounts) { transactions, accounts ->
-        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }.map { it.id }
-        val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }.map { it.id }
-        val totalAsetLancar = transactions.sumOf {
-            when {
-                it.debitAccountId in asetLancarIds -> it.amount
-                it.creditAccountId in asetLancarIds -> -it.amount
-                else -> 0.0
-            }
+    val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, allAccounts) { transactions, accounts ->
+        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && (it.accountNumber.startsWith("11") || it.accountNumber.startsWith("1-1")) }.map { it.id }
+        val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && (it.accountNumber.startsWith("21") || it.accountNumber.startsWith("2-1")) }.map { it.id }
+
+        val totalAsetLancar = accounts.filter { it.id in asetLancarIds }.sumOf { acc ->
+            val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
+            val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
+            totalDebit - totalKredit
         }
-        val totalKewajibanLancar = transactions.sumOf {
-            when {
-                it.creditAccountId in kewajibanLancarIds -> it.amount
-                it.debitAccountId in kewajibanLancarIds -> -it.amount
-                else -> 0.0
-            }
+
+        val totalKewajibanLancar = accounts.filter { it.id in kewajibanLancarIds }.sumOf { acc ->
+            val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
+            val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
+            totalKredit - totalDebit
         }
+
         val currentRatio = if (totalKewajibanLancar > 0) (totalAsetLancar / totalKewajibanLancar).toFloat() else 0f
         val status = when {
+            totalAsetLancar == 0.0 && totalKewajibanLancar == 0.0 -> HealthStatus.TIDAK_TERDEFINISI
             currentRatio >= 1.5f -> HealthStatus.SEHAT
             currentRatio >= 1.0f -> HealthStatus.WASPADA
             else -> HealthStatus.TIDAK_SEHAT
@@ -137,7 +203,7 @@ class TransactionViewModel(
         FinancialHealthData(currentRatio, status)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialHealthData())
 
-    val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, _allAccounts) { transactions, accounts ->
+    val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, allAccounts) { transactions, accounts ->
         val saldoItems = mutableListOf<NeracaSaldoItem>()
         for (account in accounts) {
             val totalDebit = transactions.filter { it.debitAccountId == account.id }.sumOf { it.amount }
@@ -156,32 +222,25 @@ class TransactionViewModel(
         saldoItems
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // ✅ --- LOGIKA BARU UNTUK LAPORAN PERUBAHAN EKUITAS (LPE) ---
     private val _lpeData = MutableStateFlow(LpeData())
     val lpeData: StateFlow<LpeData> = _lpeData.asStateFlow()
 
     fun generateLpe(startDate: Long, endDate: Long) {
         viewModelScope.launch {
-            val allTx = allTransactions.first() // Ambil semua transaksi
-            val allAcc = _allAccounts.first() // Ambil semua akun
-
-            // 1. Hitung Laba Bersih (sama seperti di Laporan Laba Rugi)
+            val allTx = allTransactions.first()
+            val allAcc = allAccounts.first()
             val pendapatanIds = allAcc.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
             val bebanIds = allAcc.filter { it.category == AccountCategory.BEBAN }.map { it.id }
             val transactionsInPeriod = allTx.filter { it.date in startDate..endDate }
             val totalPendapatan = transactionsInPeriod.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
             val totalBeban = transactionsInPeriod.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
             val labaBersih = totalPendapatan - totalBeban
-
-            // 2. Hitung Total Prive
             val priveAccountId = allAcc.find { it.accountNumber == "312" }?.id
             val totalPrive = if (priveAccountId != null) {
                 transactionsInPeriod.filter { it.debitAccountId == priveAccountId }.sumOf { it.amount }
             } else {
                 0.0
             }
-
-            // 3. Hitung Modal Awal (Saldo Akun Modal SEBELUM periode dimulai)
             val modalIds = allAcc.filter { it.category == AccountCategory.MODAL }.map { it.id }
             val transactionsBeforePeriod = allTx.filter { it.date < startDate }
             val modalAwal = transactionsBeforePeriod.sumOf {
@@ -191,9 +250,7 @@ class TransactionViewModel(
                     else -> 0.0
                 }
             }
-
             val modalAkhir = modalAwal + labaBersih - totalPrive
-
             _lpeData.value = LpeData(
                 modalAwal = modalAwal,
                 labaBersih = labaBersih,
@@ -203,78 +260,12 @@ class TransactionViewModel(
             )
         }
     }
-
-    fun clearLpe() {
-        _lpeData.value = LpeData()
-    }
-
-
-    // --- Logika Laporan ---
-    private val _reportData = MutableStateFlow(ReportData())
-    val reportData: StateFlow<ReportData> = _reportData.asStateFlow()
-
-    private val _filteredReportTransactions = MutableStateFlow<List<Transaction>>(emptyList())
-    val filteredReportTransactions: StateFlow<List<Transaction>> = _filteredReportTransactions.asStateFlow()
-
-    private var filterJob: Job? = null
-
-    fun generateReport(startDate: Long, endDate: Long, unitUsaha: UnitUsaha?) {
-        filterJob?.cancel()
-        filterJob = viewModelScope.launch {
-            val accounts = _allAccounts.first()
-            val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
-            val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
-
-            // Panggil fungsi getReportData dari repository
-            val (income, expenses) = transactionRepository.getReportData(
-                startDate,
-                endDate,
-                unitUsaha?.id,
-                pendapatanAccountIds,
-                bebanAccountIds
-            )
-
-            _reportData.value = ReportData(
-                totalIncome = income,
-                totalExpenses = expenses,
-                netProfit = income - expenses,
-                isGenerated = true,
-                startDate = startDate,
-                endDate = endDate,
-                unitUsahaName = unitUsaha?.name ?: "Semua Unit Usaha",
-                unitUsahaId = unitUsaha?.id
-            )
-
-            // Panggil fungsi getFilteredTransactions dari repository
-            transactionRepository.getFilteredTransactions(startDate, endDate, unitUsaha?.id)
-                .collect { filteredList ->
-                    _filteredReportTransactions.value = filteredList
-                }
-        }
-    }
-
-    private fun calculateReportTotals(transactions: List<Transaction>): Pair<Double, Double> {
-        val accounts = _allAccounts.value
-        val pendapatanAccountIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
-        val bebanAccountIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
-        val income = transactions.filter { it.creditAccountId in pendapatanAccountIds }.sumOf { it.amount }
-        val expenses = transactions.filter { it.debitAccountId in bebanAccountIds }.sumOf { it.amount }
-        return Pair(income, expenses)
-    }
-
-    fun clearReport() {
-        _reportData.value = ReportData()
-        _filteredReportTransactions.value = emptyList()
-        filterJob?.cancel()
-    }
-
     fun lockTransactionsUpTo(date: Long, onComplete: () -> Unit) {
         viewModelScope.launch {
             transactionRepository.lockTransactionsUpTo(date)
             onComplete()
         }
     }
-
     fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
         return allTransactions.map { transactions ->
             val filteredTx = transactions
@@ -294,8 +285,6 @@ class TransactionViewModel(
             BukuPembantuData(filteredTx, runningBalances)
         }
     }
-
-    // --- CRUD Operations ---
     fun onSearchQueryChange(newQuery: String) { _searchQuery.value = newQuery }
     fun getTransactionById(id: Int): Flow<Transaction?> = transactionRepository.getTransactionById(id)
     fun insert(transaction: Transaction) = viewModelScope.launch { transactionRepository.insert(transaction.copy(id = UUID.randomUUID().toString())) }
