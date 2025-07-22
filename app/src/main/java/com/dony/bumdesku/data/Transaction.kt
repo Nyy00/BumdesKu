@@ -2,6 +2,7 @@ package com.dony.bumdesku.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.google.firebase.firestore.PropertyName // ✅ TAMBAHKAN IMPORT INI
 
 @Entity(tableName = "transactions")
 data class Transaction(
@@ -14,17 +15,19 @@ data class Transaction(
     val amount: Double = 0.0,
     val date: Long = 0L,
 
-    // Kolom 'type' dan 'category' diganti dengan ini
     val debitAccountId: String = "",
     val creditAccountId: String = "",
 
-    // Tambahkan ini untuk mempermudah penampilan nama akun
     val debitAccountName: String = "",
     val creditAccountName: String = "",
 
     val unitUsahaId: String = "",
-    val isLocked: Boolean = false
+
+    // ✅ TAMBAHKAN ANOTASI INI
+    @get:PropertyName("locked") @set:PropertyName("locked")
+    var isLocked: Boolean = false
 ) {
-    // Constructor kosong wajib untuk Firestore
-    constructor() : this(0, "", "", "", 0.0, 0L, "", "", "", "", "")
+    // Constructor kosong ini sekarang bisa dihapus karena sudah ada nilai default,
+    // tapi tidak masalah jika tetap ada.
+    constructor() : this(0, "", "", "", 0.0, 0L, "", "", "", "", "", false)
 }

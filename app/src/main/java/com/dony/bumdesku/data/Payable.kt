@@ -10,10 +10,10 @@ data class Payable(
     var id: String = "",
     var userId: String = "",
 
-    val contactName: String,     // Nama pemasok/kreditor
-    val description: String,     // Deskripsi utang
-    val amount: Double,          // Jumlah utang
-    val transactionDate: Long,   // Tanggal utang dibuat
-    val dueDate: Long,           // Tanggal jatuh tempo
+    val contactName: String = "",     // Nama pemasok/kreditor
+    val description: String = "",     // Deskripsi utang
+    val amount: Double = 0.0,          // Jumlah utang
+    val transactionDate: Long = 0L,   // Tanggal utang dibuat
+    val dueDate: Long = 0L,           // Tanggal jatuh tempo
     val isPaid: Boolean = false  // Status lunas atau belum
 )

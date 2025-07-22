@@ -10,10 +10,10 @@ data class Receivable(
     var id: String = "",
     var userId: String = "",
 
-    val contactName: String,     // Nama pelanggan/debitor
-    val description: String,     // Deskripsi piutang
-    val amount: Double,          // Jumlah piutang
-    val transactionDate: Long,   // Tanggal piutang dibuat
-    val dueDate: Long,           // Tanggal jatuh tempo
+    val contactName: String = "",     // Nama pelanggan/debitor
+    val description: String = "",     // Deskripsi piutang
+    val amount: Double = 0.0,          // Jumlah piutang
+    val transactionDate: Long = 0L,   // Tanggal piutang dibuat
+    val dueDate: Long = 0L,           // Tanggal jatuh tempo
     val isPaid: Boolean = false  // Status lunas atau belum
 )

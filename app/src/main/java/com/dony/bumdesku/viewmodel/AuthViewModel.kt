@@ -1,5 +1,6 @@
 package com.dony.bumdesku.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -30,7 +31,6 @@ class AuthViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage
 
-    // ✅ STATEFLOW BARU UNTUK MENENTUKAN TARGET PENGGUNA
     private val _targetUserId = MutableStateFlow<String?>(null)
     val targetUserId: StateFlow<String?> = _targetUserId
 
@@ -47,26 +47,35 @@ class AuthViewModel : ViewModel() {
                 val profile = snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
                 _userProfile.value = profile
 
-                // ✅ LOGIKA BARU: TENTUKAN TARGET USER ID SETELAH PROFIL DIDAPATKAN
                 determineTargetUserId(profile)
 
             } catch (e: Exception) {
                 _errorMessage.value = "Gagal memuat profil pengguna."
-                _targetUserId.value = null // Reset jika gagal
+                _targetUserId.value = null
             }
         }
     }
 
-    // ✅ FUNGSI BANTUAN BARU
     private fun determineTargetUserId(profile: UserProfile?) {
         viewModelScope.launch {
             if (profile?.role == "auditor") {
+                Log.d("AuthViewModel", "User is an auditor. Finding 'pengurus' user...")
                 // Jika auditor, cari userId milik pengurus
                 val pengurusQuery = firestore.collection("users").whereEqualTo("role", "pengurus").limit(1).get().await()
-                _targetUserId.value = pengurusQuery.documents.firstOrNull()?.id
+                val pengurusId = pengurusQuery.documents.firstOrNull()?.id
+
+                if (pengurusId != null) {
+                    _targetUserId.value = pengurusId
+                    Log.d("AuthViewModel", "Found 'pengurus' with ID: $pengurusId. Setting as target.")
+                } else {
+                    _targetUserId.value = null
+                    Log.e("AuthViewModel", "Could not find any user with role 'pengurus'. Data will not be shown.")
+                }
+
             } else {
                 // Jika pengurus atau peran lain, gunakan ID sendiri
                 _targetUserId.value = profile?.uid
+                Log.d("AuthViewModel", "User is 'pengurus'. Setting target ID to self: ${profile?.uid}")
             }
         }
     }
@@ -79,11 +88,14 @@ class AuthViewModel : ViewModel() {
                 val userId = result.user?.uid
 
                 if (userId != null) {
-                    val userProfile = UserProfile(
+                    // Otomatisasi peran berdasarkan email
+                    val role = if (email.contains("auditor", ignoreCase = true)) "auditor" else "pengurus"
+                    val userProfileData = UserProfile(
+                        uid = userId,
                         email = email,
-                        role = if (email.contains("auditor")) "auditor" else "pengurus" // Otomatisasi peran
+                        role = role
                     )
-                    firestore.collection("users").document(userId).set(userProfile).await()
+                    firestore.collection("users").document(userId).set(userProfileData).await()
                 }
                 _authState.value = AuthState.SUCCESS
             } catch (e: Exception) {
@@ -126,7 +138,7 @@ class AuthViewModel : ViewModel() {
     fun logout() {
         auth.signOut()
         _userProfile.value = null
-        _targetUserId.value = null // Reset target saat logout
+        _targetUserId.value = null
     }
 
     fun resetAuthState() {
