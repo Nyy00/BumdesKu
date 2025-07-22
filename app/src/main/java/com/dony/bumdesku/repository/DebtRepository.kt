@@ -77,6 +77,8 @@ class DebtRepository(private val debtDao: DebtDao) {
 
     suspend fun update(payable: Payable) {
         if (payable.id.isBlank()) return
+        // Baris yang ditambahkan
+        debtDao.updatePayable(payable)
         firestore.collection("payables").document(payable.id).set(payable).await()
     }
 
@@ -97,6 +99,8 @@ class DebtRepository(private val debtDao: DebtDao) {
 
     suspend fun update(receivable: Receivable) {
         if (receivable.id.isBlank()) return
+        // Baris yang ditambahkan
+        debtDao.updateReceivable(receivable)
         firestore.collection("receivables").document(receivable.id).set(receivable).await()
     }
 
