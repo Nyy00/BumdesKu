@@ -19,7 +19,10 @@ interface DebtDao {
     @Query("SELECT * FROM payables ORDER BY dueDate ASC")
     fun getAllPayables(): Flow<List<Payable>>
 
-    // Fungsi-fungsi yang ditambahkan
+    // ✅ FUNGSI BARU UNTUK EDIT
+    @Query("SELECT * FROM payables WHERE localId = :id")
+    fun getPayableById(id: Int): Flow<Payable?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllPayables(payables: List<Payable>)
 
@@ -40,7 +43,10 @@ interface DebtDao {
     @Query("SELECT * FROM receivables ORDER BY dueDate ASC")
     fun getAllReceivables(): Flow<List<Receivable>>
 
-    // Fungsi-fungsi yang ditambahkan
+    // ✅ FUNGSI BARU UNTUK EDIT
+    @Query("SELECT * FROM receivables WHERE localId = :id")
+    fun getReceivableById(id: Int): Flow<Receivable?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllReceivables(receivables: List<Receivable>)
 

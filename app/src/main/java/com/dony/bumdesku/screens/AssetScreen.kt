@@ -24,16 +24,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import coil.compose.rememberAsyncImagePainter
 import com.dony.bumdesku.data.Asset
 import com.dony.bumdesku.viewmodel.AssetViewModel
 import com.dony.bumdesku.viewmodel.UploadState
 import java.text.NumberFormat
 import java.util.*
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,12 +186,15 @@ fun AddAssetScreen(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+
+                // ✅ PERBAIKAN DITERAPKAN DI SINI
                 OutlinedTextField(
                     value = purchasePrice,
-                    onValueChange = { purchasePrice = it },
+                    onValueChange = { newValue -> purchasePrice = newValue.filter { it.isDigit() } },
                     label = { Text("Harga Beli Satuan") },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation()
                 )
                 OutlinedTextField(
                     value = description,

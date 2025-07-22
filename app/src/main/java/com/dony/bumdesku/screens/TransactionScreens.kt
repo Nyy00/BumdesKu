@@ -14,12 +14,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
+import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.data.*
 import com.dony.bumdesku.viewmodel.ChartData
 import com.dony.bumdesku.viewmodel.TransactionViewModel
+import java.text.DecimalFormat
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,15 +178,13 @@ fun AddTransactionScreen(
     onNavigateUp: () -> Unit,
     viewModel: TransactionViewModel
 ) {
-    // ✅ Tambahkan initialValue di sini
-// ✅ INI KODE YANG BENAR
     val allAccounts by viewModel.allAccounts.collectAsState(initial = emptyList())
     val unitUsahaList by viewModel.allUnitUsaha.collectAsState(initial = emptyList())
 
     val context = LocalContext.current
 
     var description by remember { mutableStateOf(transactionToEdit?.description ?: "") }
-    var amount by remember { mutableStateOf(transactionToEdit?.amount?.takeIf { it > 0 }?.toString() ?: "") }
+    var amount by remember { mutableStateOf(transactionToEdit?.amount?.toLong()?.toString() ?: "") }
     var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
     var isUnitUsahaExpanded by remember { mutableStateOf(false) }
     var debitAccount by remember { mutableStateOf<Account?>(null) }
@@ -208,7 +213,16 @@ fun AddTransactionScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Transaksi") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Nominal") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+
+            // ✅ PERBAIKAN DITERAPKAN DI SINI
+            OutlinedTextField(
+                value = amount,
+                onValueChange = { newValue -> amount = newValue.filter { it.isDigit() } },
+                label = { Text("Nominal") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                visualTransformation = ThousandSeparatorVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
 
             ExposedDropdownMenuBox(expanded = isDebitExpanded, onExpandedChange = { isDebitExpanded = !isDebitExpanded }) {
                 OutlinedTextField(value = debitAccount?.let { "${it.accountNumber} - ${it.accountName}" } ?: "Pilih Akun Debit", onValueChange = {}, readOnly = true, label = { Text("Akun Debit") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDebitExpanded) }, modifier = Modifier.fillMaxWidth().menuAnchor())

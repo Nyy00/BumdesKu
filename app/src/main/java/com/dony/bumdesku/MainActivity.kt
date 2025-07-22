@@ -32,7 +32,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inisialisasi semua dependensi di sini
         val database = BumdesDatabase.getDatabase(this)
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
@@ -40,14 +39,12 @@ class MainActivity : ComponentActivity() {
         val accountDao = database.accountDao()
         val debtDao = database.debtDao()
 
-        // Buat instance dari semua repository
         val accountRepository = AccountRepository(accountDao)
         val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao, accountRepository)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
         val debtRepository = DebtRepository(debtDao)
 
-        // Buat semua ViewModelFactory
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val authViewModelFactory = AuthViewModelFactory()
         val assetViewModelFactory = AssetViewModelFactory(assetRepository)
@@ -56,14 +53,12 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BumdesKuTheme {
-                // Kirim semua instance yang dibutuhkan ke BumdesApp
                 BumdesApp(
                     transactionViewModelFactory = transactionViewModelFactory,
                     authViewModelFactory = authViewModelFactory,
                     assetViewModelFactory = assetViewModelFactory,
                     accountViewModelFactory = accountViewModelFactory,
                     debtViewModelFactory = debtViewModelFactory,
-                    // Kirim repository untuk pemicu sinkronisasi
                     repositories = AppRepositories(
                         unitUsaha = unitUsahaRepository,
                         asset = assetRepository,
@@ -77,7 +72,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Data class untuk membungkus semua repository agar lebih rapi
 data class AppRepositories(
     val unitUsaha: UnitUsahaRepository,
     val asset: AssetRepository,
@@ -93,22 +87,18 @@ fun BumdesApp(
     assetViewModelFactory: AssetViewModelFactory,
     accountViewModelFactory: AccountViewModelFactory,
     debtViewModelFactory: DebtViewModelFactory,
-    repositories: AppRepositories // Terima semua repository
+    repositories: AppRepositories
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
     val context = LocalContext.current
 
-    // Inisialisasi ViewModel yang akan dibagikan ke beberapa layar
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
     val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
 
-    // ✅ PEMICU SINKRONISASI UTAMA
-    // Blok ini akan berjalan setiap kali status login berubah.
     val targetUserId by authViewModel.targetUserId.collectAsStateWithLifecycle()
     LaunchedEffect(targetUserId) {
         if (targetUserId != null) {
-            // Panggil fungsi sinkronisasi dari SEMUA repository dengan targetId yang benar
             repositories.unitUsaha.syncUnitUsaha(targetUserId!!)
             repositories.asset.syncAssets(targetUserId!!)
             repositories.account.syncAccounts(targetUserId!!)
@@ -123,13 +113,18 @@ fun BumdesApp(
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable("home") {
-            // ✅ PERBAIKAN DI SINI: Tambahkan baris ini
+            // Ambil ViewModel untuk utang/piutang
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+
+            // Ambil data yang dibutuhkan dari semua ViewModel
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle()
+            val debtSummary by debtViewModel.debtSummary.collectAsStateWithLifecycle() // Ambil data ringkasan
 
             HomeScreen(
                 userRole = userProfile?.role ?: "pengurus",
                 financialHealthData = healthData,
+                debtSummary = debtSummary, // Kirim data ringkasan ke HomeScreen
                 onNavigate = { route -> navController.navigate(route) }
             )
         }
@@ -448,27 +443,53 @@ fun BumdesApp(
             }
         }
 
-        // TAMBAHKAN RUTE NAVIGASI BARU UNTUK UTANG & PIUTANG
         composable("payable_list") {
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val payables by viewModel.allPayables.collectAsState(initial = emptyList())
             PayableListScreen(
                 payables = payables,
                 onAddItemClick = { navController.navigate("add_payable") },
+                onEditItemClick = { payableId -> navController.navigate("edit_payable/$payableId") },
                 onNavigateUp = { navController.popBackStack() },
-                onMarkAsPaid = { payable -> viewModel.markPayableAsPaid(payable) } // Hubungkan aksi
+                onMarkAsPaid = { payable -> viewModel.markPayableAsPaid(payable) },
+                onDeleteItem = { payable -> viewModel.delete(payable) }
             )
         }
 
         composable("add_payable") {
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            AddPayableScreen(
-                onSave = { payable ->
-                    viewModel.insert(payable)
+            PayableEntryScreen(
+                payableToEdit = null,
+                viewModel = viewModel,
+                onSave = { /* Not used in add mode */ },
+                onSaveWithJournal = { payable, account ->
+                    viewModel.insertPayableWithJournal(payable, account)
                     navController.popBackStack()
                 },
                 onNavigateUp = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            "edit_payable/{payableId}",
+            arguments = listOf(navArgument("payableId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val payableId = backStackEntry.arguments?.getInt("payableId")
+            val payableToEdit by viewModel.getPayableById(payableId ?: -1).collectAsState(initial = null)
+
+            if (payableToEdit != null) {
+                PayableEntryScreen(
+                    payableToEdit = payableToEdit,
+                    viewModel = viewModel,
+                    onSave = { updatedPayable ->
+                        viewModel.update(updatedPayable)
+                        navController.popBackStack()
+                    },
+                    onSaveWithJournal = { _, _ -> /* Not used in edit mode */ },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
         }
 
         composable("lpe_screen") {
@@ -485,28 +506,53 @@ fun BumdesApp(
             )
         }
 
-// ✅ RUTE UNTUK MENAMPILKAN DAFTAR PIUTANG (SEKARANG AKTIF)
         composable("receivable_list") {
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val receivables by viewModel.allReceivables.collectAsState(initial = emptyList())
             ReceivableListScreen(
                 receivables = receivables,
                 onAddItemClick = { navController.navigate("add_receivable") },
+                onEditItemClick = { receivableId -> navController.navigate("edit_receivable/$receivableId") },
                 onNavigateUp = { navController.popBackStack() },
-                onMarkAsPaid = { receivable -> viewModel.markReceivableAsPaid(receivable) } // Hubungkan aksi
+                onMarkAsPaid = { receivable -> viewModel.markReceivableAsPaid(receivable) },
+                onDeleteItem = { receivable -> viewModel.delete(receivable) }
             )
         }
 
-// ✅ RUTE BARU UNTUK MENAMBAH PIUTANG
         composable("add_receivable") {
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            AddReceivableScreen(
-                onSave = { receivable ->
-                    viewModel.insert(receivable)
+            ReceivableEntryScreen(
+                receivableToEdit = null, // Mode Tambah
+                viewModel = viewModel,
+                onSave = { /* Not used in add mode */ },
+                onSaveWithJournal = { receivable, account ->
+                    viewModel.insertReceivableWithJournal(receivable, account)
                     navController.popBackStack()
                 },
                 onNavigateUp = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            "edit_receivable/{receivableId}",
+            arguments = listOf(navArgument("receivableId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val receivableId = backStackEntry.arguments?.getInt("receivableId")
+            val receivableToEdit by viewModel.getReceivableById(receivableId ?: -1).collectAsState(initial = null)
+
+            if (receivableToEdit != null) {
+                ReceivableEntryScreen(
+                    receivableToEdit = receivableToEdit, // Mode Edit
+                    viewModel = viewModel,
+                    onSave = { updatedReceivable ->
+                        viewModel.update(updatedReceivable)
+                        navController.popBackStack()
+                    },
+                    onSaveWithJournal = { _, _ -> /* Not used in edit mode */ },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
         }
 
         composable("lock_journal") {

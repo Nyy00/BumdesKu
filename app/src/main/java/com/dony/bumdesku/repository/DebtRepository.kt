@@ -4,6 +4,7 @@ import android.util.Log
 import com.dony.bumdesku.data.DebtDao
 import com.dony.bumdesku.data.Payable
 import com.dony.bumdesku.data.Receivable
+import com.dony.bumdesku.data.UserProfile
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObject
@@ -24,6 +25,11 @@ class DebtRepository(private val debtDao: DebtDao) {
     val allPayables: Flow<List<Payable>> = debtDao.getAllPayables()
     val allReceivables: Flow<List<Receivable>> = debtDao.getAllReceivables()
 
+    // ✅ FUNGSI BARU UNTUK EDIT
+    fun getPayableById(id: Int): Flow<Payable?> = debtDao.getPayableById(id)
+    fun getReceivableById(id: Int): Flow<Receivable?> = debtDao.getReceivableById(id)
+
+    // ... sisa kode repositori tetap sama ...
     fun syncPayables(targetUserId: String) {
         firestore.collection("payables").whereEqualTo("userId", targetUserId)
             .addSnapshotListener { snapshots, e ->
@@ -60,7 +66,6 @@ class DebtRepository(private val debtDao: DebtDao) {
             }
     }
 
-    // ... sisa kode (insert, update, delete) tetap sama
     suspend fun insert(payable: Payable) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
         val newPayable = payable.copy(
