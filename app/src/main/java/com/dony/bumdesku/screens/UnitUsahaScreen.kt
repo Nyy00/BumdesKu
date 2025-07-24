@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
@@ -16,16 +15,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dony.bumdesku.data.UnitUsaha
+import com.dony.bumdesku.data.UnitUsahaType // <-- Import baru
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnitUsahaManagementScreen(
     unitUsahaList: List<UnitUsaha>,
-    onAddUnitUsaha: (String) -> Unit,
+    // Lambda diperbarui untuk menerima tipe unit usaha
+    onAddUnitUsaha: (String, UnitUsahaType) -> Unit,
     onDeleteUnitUsaha: (UnitUsaha) -> Unit,
     onNavigateUp: () -> Unit
 ) {
     var newUnitName by remember { mutableStateOf("") }
+    // State baru untuk dropdown
+    var isTypeExpanded by remember { mutableStateOf(false) }
+    var selectedType by remember { mutableStateOf(UnitUsahaType.UMUM) }
     val context = LocalContext.current
 
     Scaffold(
@@ -47,26 +51,62 @@ fun UnitUsahaManagementScreen(
                 .padding(16.dp)
         ) {
             // Form untuk menambah unit usaha baru
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            OutlinedTextField(
+                value = newUnitName,
+                onValueChange = { newUnitName = it },
+                label = { Text("Nama Unit Usaha Baru") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dropdown untuk memilih Jenis Unit Usaha
+            ExposedDropdownMenuBox(
+                expanded = isTypeExpanded,
+                onExpandedChange = { isTypeExpanded = !isTypeExpanded }
             ) {
                 OutlinedTextField(
-                    value = newUnitName,
-                    onValueChange = { newUnitName = it },
-                    label = { Text("Nama Unit Usaha Baru") },
-                    modifier = Modifier.weight(1f)
+                    value = selectedType.name.replace("_", " "),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Jenis Unit Usaha") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTypeExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
                 )
-                Button(onClick = {
+                ExposedDropdownMenu(
+                    expanded = isTypeExpanded,
+                    onDismissRequest = { isTypeExpanded = false }
+                ) {
+                    // Ambil semua nilai dari enum UnitUsahaType
+                    UnitUsahaType.values().forEach { type ->
+                        DropdownMenuItem(
+                            text = { Text(type.name.replace("_", " ")) },
+                            onClick = {
+                                selectedType = type
+                                isTypeExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
                     if (newUnitName.isNotBlank()) {
-                        onAddUnitUsaha(newUnitName)
+                        // Kirim nama dan tipe yang dipilih
+                        onAddUnitUsaha(newUnitName, selectedType)
                         newUnitName = "" // Kosongkan input field
+                        selectedType = UnitUsahaType.UMUM // Reset pilihan
                     } else {
                         Toast.makeText(context, "Nama unit tidak boleh kosong", Toast.LENGTH_SHORT).show()
                     }
                 }) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Tambah")
-                }
+                Text("Tambah Unit Usaha")
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -78,13 +118,16 @@ fun UnitUsahaManagementScreen(
                 Text("Belum ada unit usaha.")
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // ✅ BAGIAN YANG SUDAH DIPERBAIKI
                     items(unitUsahaList, key = { it.localId }) { unit ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = unit.name, modifier = Modifier.weight(1f))
+                            // Tampilkan nama dan jenis unit usaha
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = unit.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(text = unit.type.name.replace("_", " "), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            }
                             IconButton(onClick = { onDeleteUnitUsaha(unit) }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Gray)
                             }

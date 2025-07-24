@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,17 +25,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import coil.compose.rememberAsyncImagePainter
 import com.dony.bumdesku.data.Asset
+import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import com.dony.bumdesku.viewmodel.AssetViewModel
 import com.dony.bumdesku.viewmodel.UploadState
 import java.text.NumberFormat
@@ -46,9 +43,12 @@ import java.util.*
 fun AssetListScreen(
     assets: List<Asset>,
     onAddAssetClick: () -> Unit,
+    onItemClick: (Asset) -> Unit,
     onNavigateUp: () -> Unit,
     onDeleteClick: (Asset) -> Unit
 ) {
+    var assetToDelete by remember { mutableStateOf<Asset?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -77,20 +77,54 @@ fun AssetListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(assets, key = { it.localId }) { asset ->
-                    AssetItem(asset = asset, onDeleteClick = { onDeleteClick(asset) })
+                    AssetItem(
+                        asset = asset,
+                        onItemClick = { onItemClick(asset) },
+                        onDeleteClick = { assetToDelete = asset }
+                    )
                 }
             }
         }
     }
+
+    assetToDelete?.let { asset ->
+        AlertDialog(
+            onDismissRequest = { assetToDelete = null },
+            title = { Text("Konfirmasi Hapus") },
+            text = { Text("Apakah Anda yakin ingin menghapus aset '${asset.name}'? Stok akan hilang permanen.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteClick(asset)
+                        assetToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Ya, Hapus")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { assetToDelete = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun AssetItem(asset: Asset, onDeleteClick: () -> Unit) {
+fun AssetItem(
+    asset: Asset,
+    onItemClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
     val localeID = Locale("in", "ID")
     val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onItemClick),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
@@ -107,9 +141,19 @@ fun AssetItem(asset: Asset, onDeleteClick: () -> Unit) {
                 Spacer(modifier = Modifier.width(16.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(asset.name, style = MaterialTheme.typography.titleMedium)
-                Text("Jumlah: ${asset.quantity}", style = MaterialTheme.typography.bodyMedium)
-                Text("Harga: ${currencyFormat.format(asset.purchasePrice)}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(asset.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Stok: ${asset.quantity}", style = MaterialTheme.typography.bodyMedium)
+
+                Text(
+                    "Harga Jual: ${currencyFormat.format(asset.sellingPrice)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "Modal: ${currencyFormat.format(asset.purchasePrice)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
             }
             IconButton(onClick = onDeleteClick) {
                 Icon(Icons.Default.DeleteOutline, "Hapus Aset", tint = Color.Gray)
@@ -122,19 +166,46 @@ fun AssetItem(asset: Asset, onDeleteClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddAssetScreen(
+    assetToEdit: Asset? = null,
     viewModel: AssetViewModel,
     onSaveComplete: () -> Unit,
     onNavigateUp: () -> Unit
 ) {
     val context = LocalContext.current
+    val isEditMode = assetToEdit != null
+
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
     var purchasePrice by remember { mutableStateOf("") }
+    var sellingPrice by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
 
-    val uploadState by viewModel.uploadState.collectAsStateWithLifecycle()
+    // --- PERBAIKAN KESALAHAN KETIK DI SINI ---
+    var category by remember { mutableStateOf("") }
+    // ------------------------------------------
 
+    var isCategoryExpanded by remember { mutableStateOf(false) }
+
+    val defaultCategories = listOf(
+        "Minuman", "Makanan Ringan", "Bumbu Dapur", "Mie Instan",
+        "Kebutuhan Mandi", "Kebutuhan Cuci", "ATK", "Rokok", "Lain-lain"
+    )
+    val customCategories by viewModel.allCategories.collectAsStateWithLifecycle()
+    val allCategoryOptions = (defaultCategories + customCategories).distinct().sorted()
+
+    LaunchedEffect(assetToEdit) {
+        if (isEditMode) {
+            name = assetToEdit?.name ?: ""
+            description = assetToEdit?.description ?: ""
+            quantity = assetToEdit?.quantity?.toString() ?: ""
+            purchasePrice = assetToEdit?.purchasePrice?.toLong()?.toString() ?: ""
+            sellingPrice = assetToEdit?.sellingPrice?.toLong()?.toString() ?: ""
+            category = assetToEdit?.category ?: "Lain-lain"
+        }
+    }
+
+    val uploadState by viewModel.uploadState.collectAsStateWithLifecycle()
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -155,7 +226,7 @@ fun AddAssetScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tambah Aset Baru") },
+                title = { Text(if (isEditMode) "Edit Aset" else "Tambah Aset Baru") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp, enabled = uploadState != UploadState.UPLOADING) {
                         Icon(Icons.Default.ArrowBack, "Kembali")
@@ -164,7 +235,7 @@ fun AddAssetScreen(
             )
         }
     ) { paddingValues ->
-        Box(contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -176,9 +247,39 @@ fun AddAssetScreen(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nama Aset / Barang") },
+                    label = { Text("Nama Produk / Barang") },
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                ExposedDropdownMenuBox(
+                    expanded = isCategoryExpanded,
+                    onExpandedChange = { isCategoryExpanded = !isCategoryExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = category,
+                        onValueChange = { category = it },
+                        label = { Text("Kategori Produk") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCategoryExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isCategoryExpanded,
+                        onDismissRequest = { isCategoryExpanded = false }
+                    ) {
+                        allCategoryOptions.forEach { selectionOption ->
+                            DropdownMenuItem(
+                                text = { Text(selectionOption) },
+                                onClick = {
+                                    category = selectionOption
+                                    isCategoryExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = { quantity = it },
@@ -187,15 +288,24 @@ fun AddAssetScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
 
-                // ✅ PERBAIKAN DITERAPKAN DI SINI
                 OutlinedTextField(
                     value = purchasePrice,
                     onValueChange = { newValue -> purchasePrice = newValue.filter { it.isDigit() } },
-                    label = { Text("Harga Beli Satuan") },
+                    label = { Text("Harga Beli Satuan (Modal)") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     visualTransformation = ThousandSeparatorVisualTransformation()
                 )
+
+                OutlinedTextField(
+                    value = sellingPrice,
+                    onValueChange = { newValue -> sellingPrice = newValue.filter { it.isDigit() } },
+                    label = { Text("Harga Jual Satuan") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation()
+                )
+
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
@@ -223,22 +333,41 @@ fun AddAssetScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
                     onClick = {
                         val quantityInt = quantity.toIntOrNull()
                         val priceDouble = purchasePrice.toDoubleOrNull()
-                        if (name.isNotBlank() && quantityInt != null && priceDouble != null) {
-                            val newAsset = Asset(
-                                name = name,
-                                quantity = quantityInt,
-                                purchasePrice = priceDouble,
-                                description = description
-                            )
-                            viewModel.insert(newAsset, imageUri)
+                        val sellingPriceDouble = sellingPrice.toDoubleOrNull()
+
+                        if (name.isNotBlank() && quantityInt != null && priceDouble != null && sellingPriceDouble != null) {
+                            val finalCategory = category.trim().ifBlank { "Lain-lain" }
+                            if (isEditMode) {
+                                val updatedAsset = assetToEdit!!.copy(
+                                    name = name,
+                                    quantity = quantityInt,
+                                    purchasePrice = priceDouble,
+                                    sellingPrice = sellingPriceDouble,
+                                    description = description,
+                                    category = finalCategory
+                                )
+                                viewModel.update(updatedAsset)
+                                Toast.makeText(context, "Aset berhasil diperbarui", Toast.LENGTH_SHORT).show()
+                                onSaveComplete()
+                            } else {
+                                val newAsset = Asset(
+                                    name = name,
+                                    quantity = quantityInt,
+                                    purchasePrice = priceDouble,
+                                    sellingPrice = sellingPriceDouble,
+                                    description = description,
+                                    category = finalCategory
+                                )
+                                viewModel.insert(newAsset, imageUri)
+                            }
                         } else {
-                            Toast.makeText(context, "Harap isi Nama, Jumlah, dan Harga dengan benar", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Harap isi semua kolom dengan benar", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

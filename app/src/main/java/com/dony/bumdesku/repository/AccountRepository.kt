@@ -23,36 +23,47 @@ class AccountRepository(private val accountDao: AccountDao) {
 
     val allAccounts: Flow<List<Account>> = accountDao.getAllAccounts()
 
-    // Fungsi sync sekarang menerima targetUserId
+    // --- FUNGSI SINKRONISASI DIPERBARUI UNTUK SEMUA PENGGUNA ---
     fun syncAccounts(targetUserId: String) {
-        firestore.collection("accounts").whereEqualTo("userId", targetUserId)
-            .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.w("AccountRepository", "Listen failed.", e)
-                    return@addSnapshotListener
+        // Cari ID pengurus utama/manajer pertama sebagai sumber daftar akun (COA)
+        firestore.collection("users")
+            .whereIn("role", listOf("manager", "pengurus"))
+            .limit(1)
+            .get()
+            .addOnSuccessListener { querySnapshot ->
+                val mainOwnerId = querySnapshot.documents.firstOrNull()?.id
+                if (mainOwnerId == null) {
+                    Log.e("AccountRepository", "Tidak ditemukan manajer/pengurus utama untuk dijadikan sumber COA.")
+                    return@addOnSuccessListener
                 }
 
-                scope.launch {
-                    val firestoreAccounts = snapshots?.mapNotNull { doc ->
-                        doc.toObject<Account>().apply { id = doc.id }
-                    } ?: emptyList()
-
-                    // Cek apakah PENGGUNA SAAT INI adalah pemilik data
-                    val isOwner = auth.currentUser?.uid == targetUserId
-                    if (firestoreAccounts.isEmpty() && isOwner) {
-                        // Jika di server kosong DAN pengguna adalah pemilik (pengurus), upload data default
-                        val localAccounts = accountDao.getAllAccounts().first()
-                        if (localAccounts.isNotEmpty()) {
-                            localAccounts.forEach { acc -> insert(acc) }
+                // Dengarkan perubahan pada daftar akun milik pengurus utama
+                firestore.collection("accounts").whereEqualTo("userId", mainOwnerId)
+                    .addSnapshotListener { snapshots, e ->
+                        if (e != null) {
+                            Log.w("AccountRepository", "Listen failed.", e)
+                            return@addSnapshotListener
                         }
-                    } else {
-                        // Untuk auditor, atau pengurus yang sudah punya data, sinkronkan saja
-                        accountDao.deleteAll()
-                        accountDao.insertAll(firestoreAccounts)
+
+                        scope.launch(Dispatchers.IO) {
+                            val firestoreAccounts = snapshots?.mapNotNull { doc ->
+                                doc.toObject<Account>().apply { id = doc.id }
+                            } ?: emptyList()
+
+                            // Hapus semua akun lokal dan ganti dengan daftar terbaru
+                            // Ini memastikan semua pengguna (manajer, pengurus toko, dll.)
+                            // memiliki daftar akun (COA) yang sama dan terbaru.
+                            accountDao.deleteAll()
+                            accountDao.insertAll(firestoreAccounts)
+                            Log.d("AccountRepository", "Sinkronisasi COA berhasil, ${firestoreAccounts.size} akun diterima.")
+                        }
                     }
-                }
+            }
+            .addOnFailureListener {
+                Log.e("AccountRepository", "Gagal mencari pengurus utama.", it)
             }
     }
+    // ---------------------------------------------------------
 
     suspend fun insert(account: Account) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
@@ -62,8 +73,9 @@ class AccountRepository(private val accountDao: AccountDao) {
     }
 
     suspend fun update(account: Account) {
-        if (account.id.isBlank()) return
-        firestore.collection("accounts").document(account.id).set(account).await()
+        if (account.id.isNotBlank()) {
+            firestore.collection("accounts").document(account.id).set(account).await()
+        }
     }
 
     suspend fun delete(account: Account) {

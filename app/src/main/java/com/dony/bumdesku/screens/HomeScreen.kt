@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dony.bumdesku.data.FinancialHealthData
+import com.dony.bumdesku.data.UnitUsahaType
 import com.dony.bumdesku.viewmodel.DebtSummary
 import java.text.NumberFormat
 import java.util.*
@@ -27,7 +28,8 @@ fun HomeScreen(
     onNavigate: (String) -> Unit,
     userRole: String,
     financialHealthData: FinancialHealthData,
-    debtSummary: DebtSummary // ✅ 1. Terima data ringkasan
+    debtSummary: DebtSummary,
+    activeUnitUsahaType: UnitUsahaType = UnitUsahaType.UMUM
 ) {
     Scaffold(
         topBar = {
@@ -48,59 +50,41 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp) // Hanya padding horizontal di sini
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(0.dp)) // Spacer untuk padding atas
+            Spacer(modifier = Modifier.height(8.dp))
 
             FinancialHealthCard(data = financialHealthData)
-
-            // ✅ 3. Tampilkan kartu ringkasan yang baru
             DebtSummaryCard(summary = debtSummary, onNavigate = onNavigate)
 
-            // --- Menu Laporan (Semua Peran) ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Assessment,
-                    title = "Laba Rugi",
-                    onClick = { onNavigate("report_screen") }
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccountBalance,
-                    title = "Neraca",
-                    onClick = { onNavigate("neraca_screen") }
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Balance,
-                    title = "Neraca Saldo",
-                    onClick = { onNavigate("neraca_saldo_screen") }
-                )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.TrendingUp,
-                    title = "Perubahan Modal",
-                    onClick = { onNavigate("lpe_screen") }
-                )
+            if (activeUnitUsahaType != UnitUsahaType.UMUM) {
+                MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
+                when (activeUnitUsahaType) {
+                    UnitUsahaType.TOKO -> TokoMenu(onNavigate)
+                    UnitUsahaType.WARKOP -> WarkopMenu(onNavigate)
+                    UnitUsahaType.JASA_SEWA -> JasaSewaMenu(onNavigate)
+                    UnitUsahaType.JASA_PEMBAYARAN -> JasaPembayaranMenu(onNavigate)
+                    UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
+                    else -> {}
+                }
             }
 
-            // --- Menu Operasional (Semua Peran) ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            MenuSeparator("Menu Laporan")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Assessment, title = "Laba Rugi", onClick = { onNavigate("report_screen") })
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AccountBalance, title = "Neraca", onClick = { onNavigate("neraca_screen") })
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Balance, title = "Neraca Saldo", onClick = { onNavigate("neraca_saldo_screen") })
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.TrendingUp, title = "Perubahan Modal", onClick = { onNavigate("lpe_screen") })
+            }
+
+            // --- MENU BUKU BESAR DIKEMBALIKAN DI SINI (UNTUK SEMUA PERAN) ---
+            MenuSeparator("Menu Operasional")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 FeatureCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.FormatListBulleted,
@@ -114,67 +98,96 @@ fun HomeScreen(
                     onClick = { onNavigate("account_list") }
                 )
             }
+            // -----------------------------------------------------------------
 
-            // --- Menu Manajemen (Hanya untuk PENGURUS) ---
-            if (userRole == "pengurus") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.AddCircle,
-                        title = "Input Jurnal",
-                        onClick = { onNavigate("add_transaction") }
-                    )
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Store,
-                        title = "Unit Usaha",
-                        onClick = { onNavigate("unit_usaha_management") }
-                    )
+            if (userRole == "pengurus" || userRole == "manager") {
+                MenuSeparator("Menu Manajemen")
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddCircle, title = "Input Jurnal", onClick = { onNavigate("add_transaction") })
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignBottom, title = "Utang Usaha", onClick = { onNavigate("payable_list") })
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Inventory,
-                        title = "Manajemen Aset",
-                        onClick = { onNavigate("asset_list") }
-                    )
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.Lock,
-                        title = "Kunci Jurnal",
-                        onClick = { onNavigate("lock_journal") }
-                    )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignTop, title = "Piutang Usaha", onClick = { onNavigate("receivable_list") })
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Manajemen Aset", onClick = { onNavigate("asset_list") })
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.VerticalAlignBottom,
-                        title = "Utang Usaha",
-                        onClick = { onNavigate("payable_list") }
-                    )
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.VerticalAlignTop,
-                        title = "Piutang Usaha",
-                        onClick = { onNavigate("receivable_list") }
-                    )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Store, title = "Unit Usaha", onClick = { onNavigate("unit_usaha_management") })
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Lock, title = "Kunci Jurnal", onClick = { onNavigate("lock_journal") })
                 }
             }
-            Spacer(modifier = Modifier.height(0.dp)) // Spacer untuk padding bawah
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+// --- Composable untuk Menu-menu Spesifik ---
+
+@Composable
+fun TokoMenu(onNavigate: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PointOfSale, title = "Kasir (POS)", onClick = { onNavigate("pos_screen") })
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Stok Barang", onClick = { onNavigate("asset_list") })
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Penjualan", onClick = { onNavigate("sales_report") })
+            Spacer(modifier = Modifier.weight(1f)) // Spacer agar tombol tetap rata kiri
         }
     }
 }
 
-// ✅ 2. Buat Composable baru untuk kartu ringkasan
+@Composable
+fun WarkopMenu(onNavigate: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PointOfSale, title = "Kasir Warkop", onClick = { /* TODO */ })
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.MenuBook, title = "Daftar Menu", onClick = { /* TODO */ })
+    }
+}
+
+@Composable
+fun JasaSewaMenu(onNavigate: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddBusiness, title = "Input Penyewaan", onClick = { /* TODO */ })
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.CalendarToday, title = "Jadwal Sewa", onClick = { /* TODO */ })
+    }
+}
+
+@Composable
+fun JasaPembayaranMenu(onNavigate: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ReceiptLong, title = "Bayar Tagihan", onClick = { /* TODO */ })
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PriceCheck, title = "Cek Tagihan", onClick = { /* TODO */ })
+    }
+}
+
+@Composable
+fun AgribisnisMenu(onNavigate: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Agriculture, title = "Catat Panen", onClick = { /* TODO */ })
+        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { /* TODO */ })
+    }
+}
+
+// Composable baru untuk membuat pemisah antar menu
+@Composable
+fun MenuSeparator(title: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Divider(modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
 @Composable
 fun DebtSummaryCard(summary: DebtSummary, onNavigate: (String) -> Unit) {
     val localeID = Locale("in", "ID")
@@ -222,7 +235,6 @@ fun DebtSummaryCard(summary: DebtSummary, onNavigate: (String) -> Unit) {
 }
 
 
-// Composable FeatureCard tidak perlu diubah
 @Composable
 fun FeatureCard(
     modifier: Modifier = Modifier,

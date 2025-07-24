@@ -15,7 +15,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.viewmodel.AuthState
+import com.dony.bumdesku.viewmodel.AuthViewModel
+import java.util.Locale
 
 @Composable
 fun LoginScreen(
@@ -96,16 +100,25 @@ fun LoginScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
-    authState: AuthState, // Parameter baru ditambahkan di sini
-    onRegisterClick: (String, String) -> Unit,
+    authViewModel: AuthViewModel, // Gunakan instance ViewModel langsung
+    onRegisterClick: (String, String, String) -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
+
+    // --- State untuk Dropdown Unit Usaha ---
+    val unitUsahaList by authViewModel.allUnitUsahaList.collectAsStateWithLifecycle()
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+    // ---------------------------------------
+
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -155,13 +168,58 @@ fun RegisterScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 enabled = authState != AuthState.LOADING
             )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Dropdown untuk Memilih Peran ---
+            ExposedDropdownMenuBox(
+                expanded = isUnitUsahaExpanded,
+                onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Daftar sebagai pengelola") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = isUnitUsahaExpanded,
+                    onDismissRequest = { isUnitUsahaExpanded = false }
+                ) {
+                    if (unitUsahaList.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("Tidak ada unit usaha tersedia") },
+                            onClick = { isUnitUsahaExpanded = false }
+                        )
+                    } else {
+                        unitUsahaList.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    selectedUnitUsaha = unit
+                                    isUnitUsahaExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            // ----------------------------------------
+
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
                     if (email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank()) {
                         if (password == confirmPassword) {
-                            onRegisterClick(email, password)
+                            if (selectedUnitUsaha != null) {
+                                onRegisterClick(email, password, selectedUnitUsaha!!.id)
+                            } else {
+                                Toast.makeText(context, "Harap pilih unit usaha", Toast.LENGTH_SHORT).show()
+                            }
                         } else {
                             Toast.makeText(context, "Password tidak cocok", Toast.LENGTH_SHORT).show()
                         }

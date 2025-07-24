@@ -17,9 +17,10 @@ import java.util.UUID
         Asset::class,
         Account::class,
         Payable::class,
-        Receivable::class
+        Receivable::class,
+        Sale::class // <-- 1. Tambahkan kelas Sale di sini
     ],
-    version = 6,
+    version = 9, // <-- 2. NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
@@ -29,6 +30,7 @@ abstract class BumdesDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
     abstract fun accountDao(): AccountDao
     abstract fun debtDao(): DebtDao
+    abstract fun saleDao(): SaleDao // <-- 3. Tambahkan abstract function untuk SaleDao
 
     companion object {
         @Volatile
@@ -42,7 +44,6 @@ abstract class BumdesDatabase : RoomDatabase() {
                     "bumdes_database"
                 )
                     .fallbackToDestructiveMigration()
-                    // [PERBAIKAN] Tambahkan callback di sini
                     .addCallback(BumdesDatabaseCallback(CoroutineScope(Dispatchers.IO)))
                     .build()
                 INSTANCE = instance
@@ -51,7 +52,6 @@ abstract class BumdesDatabase : RoomDatabase() {
         }
     }
 
-    // [PERBAIKAN] Buat kelas Callback di sini
     private class BumdesDatabaseCallback(private val scope: CoroutineScope) : RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
             super.onCreate(db)
@@ -63,6 +63,8 @@ abstract class BumdesDatabase : RoomDatabase() {
         }
 
         suspend fun populateDatabase(accountDao: AccountDao) {
+            // Hapus data lama untuk memastikan tidak ada duplikat saat dibuat ulang
+            accountDao.deleteAll()
             val defaultAccounts = listOf(
                 // ASET LANCAR
                 Account(id = UUID.randomUUID().toString(), accountNumber = "111", accountName = "Kas Tunai", category = AccountCategory.ASET),
@@ -78,11 +80,13 @@ abstract class BumdesDatabase : RoomDatabase() {
                 // PENDAPATAN
                 Account(id = UUID.randomUUID().toString(), accountNumber = "411", accountName = "Pendapatan Jasa", category = AccountCategory.PENDAPATAN),
                 Account(id = UUID.randomUUID().toString(), accountNumber = "412", accountName = "Pendapatan Sewa", category = AccountCategory.PENDAPATAN),
+                // 4. Akun baru untuk penjualan dari kasir
+                Account(id = UUID.randomUUID().toString(), accountNumber = "413", accountName = "Pendapatan Penjualan", category = AccountCategory.PENDAPATAN),
                 // BEBAN
                 Account(id = UUID.randomUUID().toString(), accountNumber = "511", accountName = "Beban Gaji", category = AccountCategory.BEBAN),
                 Account(id = UUID.randomUUID().toString(), accountNumber = "512", accountName = "Beban Listrik & Air", category = AccountCategory.BEBAN)
             )
-            defaultAccounts.forEach { accountDao.insert(it) }
+            accountDao.insertAll(defaultAccounts)
         }
     }
 }

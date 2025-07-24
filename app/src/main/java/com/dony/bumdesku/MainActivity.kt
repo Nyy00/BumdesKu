@@ -16,12 +16,24 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.dony.bumdesku.data.*
+import com.dony.bumdesku.features.toko.report.SalesReportScreen
+import com.dony.bumdesku.features.toko.report.SalesReportViewModel
+import com.dony.bumdesku.features.toko.report.SalesReportViewModelFactory
+import com.google.gson.Gson
+import com.dony.bumdesku.features.toko.report.SaleDetailScreen
+import com.dony.bumdesku.features.toko.report.SaleDetailViewModel
+import com.dony.bumdesku.features.toko.report.SaleDetailViewModelFactory
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.AssetRepository
 import com.dony.bumdesku.repository.DebtRepository
 import com.dony.bumdesku.repository.TransactionRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import com.dony.bumdesku.screens.*
+import com.dony.bumdesku.features.toko.PosScreen
+import com.dony.bumdesku.features.toko.PosViewModel
+import com.dony.bumdesku.features.toko.PosViewModelFactory
+import com.dony.bumdesku.repository.PosRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -40,7 +52,7 @@ class MainActivity : ComponentActivity() {
         val debtDao = database.debtDao()
 
         val accountRepository = AccountRepository(accountDao)
-        val transactionRepository = TransactionRepository(transactionDao, unitUsahaDao, accountRepository)
+        val transactionRepository = TransactionRepository(transactionDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
         val debtRepository = DebtRepository(debtDao)
@@ -51,6 +63,13 @@ class MainActivity : ComponentActivity() {
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
 
+        val saleDao = database.saleDao()
+        val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
+        val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
+        val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
+        val saleDetailViewModelFactory = SaleDetailViewModelFactory()
+
+
         setContent {
             BumdesKuTheme {
                 BumdesApp(
@@ -59,6 +78,9 @@ class MainActivity : ComponentActivity() {
                     assetViewModelFactory = assetViewModelFactory,
                     accountViewModelFactory = accountViewModelFactory,
                     debtViewModelFactory = debtViewModelFactory,
+                    salesReportViewModelFactory = salesReportViewModelFactory,
+                    saleDetailViewModelFactory = saleDetailViewModelFactory,
+                    posViewModelFactory = posViewModelFactory,
                     repositories = AppRepositories(
                         unitUsaha = unitUsahaRepository,
                         asset = assetRepository,
@@ -87,6 +109,9 @@ fun BumdesApp(
     assetViewModelFactory: AssetViewModelFactory,
     accountViewModelFactory: AccountViewModelFactory,
     debtViewModelFactory: DebtViewModelFactory,
+    salesReportViewModelFactory: SalesReportViewModelFactory,
+    saleDetailViewModelFactory: SaleDetailViewModelFactory,
+    posViewModelFactory: PosViewModelFactory,
     repositories: AppRepositories
 ) {
     val navController = rememberNavController()
@@ -94,7 +119,8 @@ fun BumdesApp(
     val context = LocalContext.current
 
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-    val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+    val transactionViewModel: TransactionViewModel =
+        viewModel(factory = transactionViewModelFactory)
 
     val targetUserId by authViewModel.targetUserId.collectAsStateWithLifecycle()
     LaunchedEffect(targetUserId) {
@@ -113,35 +139,43 @@ fun BumdesApp(
     NavHost(navController = navController, startDestination = startDestination) {
 
         composable("home") {
-            // Ambil ViewModel untuk utang/piutang
             val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-
-            // Ambil data yang dibutuhkan dari semua ViewModel
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle()
-            val debtSummary by debtViewModel.debtSummary.collectAsStateWithLifecycle() // Ambil data ringkasan
+            val debtSummary by debtViewModel.debtSummary.collectAsStateWithLifecycle()
+            // Ambil unit usaha yang aktif dari AuthViewModel
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
 
             HomeScreen(
                 userRole = userProfile?.role ?: "pengurus",
                 financialHealthData = healthData,
-                debtSummary = debtSummary, // Kirim data ringkasan ke HomeScreen
+                debtSummary = debtSummary,
+                // Kirim tipe unit usaha yang aktif ke HomeScreen
+                activeUnitUsahaType = activeUnitUsaha?.type ?: UnitUsahaType.UMUM,
                 onNavigate = { route -> navController.navigate(route) }
             )
         }
+
         composable("unit_usaha_management") {
-            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+            val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsStateWithLifecycle(
+                emptyList()
+            )
             UnitUsahaManagementScreen(
                 unitUsahaList = unitUsahaList,
-                onAddUnitUsaha = { unitName -> transactionViewModel.insert(UnitUsaha(name = unitName)) },
+                // Pastikan lambda mengirimkan objek UnitUsaha dengan tipe yang benar
+                onAddUnitUsaha = { unitName, unitType ->
+                    transactionViewModel.insert(UnitUsaha(name = unitName, type = unitType))
+                },
                 onDeleteUnitUsaha = { unitUsaha -> transactionViewModel.delete(unitUsaha) },
                 onNavigateUp = { navController.popBackStack() }
             )
         }
 
-        // ... (Sisa NavHost Anda)
         composable("login") {
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
+            val navigationState by authViewModel.loginNavigationState.collectAsStateWithLifecycle()
 
             LoginScreen(
                 authState = authState,
@@ -151,24 +185,63 @@ fun BumdesApp(
                 onNavigateToRegister = { navController.navigate("register") }
             )
 
-            LaunchedEffect(authState) {
-                when (authState) {
-                    AuthState.SUCCESS -> {
-                        navController.navigate("home") {
-                            popUpTo("login") { inclusive = true }
+            // --- NAVIGATION LOGIC SIMPLIFIED ---
+            LaunchedEffect(navigationState) {
+                when (navigationState) {
+                    LoginNavigationState.NAVIGATE_TO_HOME_SPESIFIK,
+                    LoginNavigationState.NAVIGATE_TO_HOME_UMUM -> {
+                        navController.navigate("home") { popUpTo("login") { inclusive = true } }
+                        authViewModel.resetNavigationState()
+                        authViewModel.resetAuthState()
+                    }
+
+                    LoginNavigationState.NAVIGATE_TO_SELECTION -> {
+                        navController.navigate("unit_usaha_selection") {
+                            popUpTo("login") {
+                                inclusive = true
+                            }
                         }
+                        authViewModel.resetNavigationState()
                         authViewModel.resetAuthState()
                     }
 
-                    AuthState.ERROR -> {
-                        Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT)
-                            .show()
-                        authViewModel.resetAuthState()
+                    LoginNavigationState.IDLE -> { /* Do nothing */
                     }
-
-                    else -> {}
                 }
             }
+
+            // This handles error messages
+            LaunchedEffect(authState) {
+                if (authState == AuthState.ERROR) {
+                    Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT)
+                        .show()
+                    authViewModel.resetAuthState()
+                }
+            }
+        }
+
+        // --- Rute Baru untuk Pemilihan Unit Usaha ---
+        composable("unit_usaha_selection") {
+            val unitUsahaList by authViewModel.userUnitUsahaList.collectAsStateWithLifecycle()
+
+            UnitUsahaSelectionScreen(
+                unitUsahaList = unitUsahaList,
+                onUnitSelected = { selectedUnit ->
+                    authViewModel.setActiveUnitUsaha(selectedUnit)
+                    navController.navigate("home") {
+                        // Hapus layar pemilihan dari back stack
+                        popUpTo("unit_usaha_selection") { inclusive = true }
+                    }
+                },
+                onLogout = {
+                    authViewModel.logout()
+                    navController.navigate("login") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
+                    }
+                }
+            )
         }
 
         composable("account_list") {
@@ -199,13 +272,14 @@ fun BumdesApp(
 
 
         composable("register") {
+            // Kita butuh authViewModel di sini untuk mengambil daftar unit usaha
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
 
             RegisterScreen(
-                authState = authState,
-                onRegisterClick = { email, password ->
-                    authViewModel.registerUser(email, password)
+                authViewModel = authViewModel, // Berikan ViewModel ke layar
+                onRegisterClick = { email, password, unitUsahaId ->
+                    authViewModel.registerUser(email, password, unitUsahaId)
                 },
                 onNavigateToLogin = { navController.popBackStack() }
             )
@@ -350,6 +424,10 @@ fun BumdesApp(
             AssetListScreen(
                 assets = assets,
                 onAddAssetClick = { navController.navigate("add_asset") },
+                // Arahkan ke rute edit saat item diklik
+                onItemClick = { asset ->
+                    navController.navigate("edit_asset/${asset.localId}")
+                },
                 onNavigateUp = { navController.popBackStack() },
                 onDeleteClick = { asset -> assetViewModel.delete(asset) }
             )
@@ -357,11 +435,35 @@ fun BumdesApp(
 
         composable("add_asset") {
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
+            // Panggil AddAssetScreen tanpa parameter assetToEdit (mode tambah)
             AddAssetScreen(
                 viewModel = assetViewModel,
                 onSaveComplete = { navController.popBackStack() },
                 onNavigateUp = { navController.popBackStack() }
             )
+        }
+
+        composable(
+            "edit_asset/{assetId}",
+            arguments = listOf(navArgument("assetId") { type = NavType.IntType })
+        ) { backStackEntry ->
+            val assetId = backStackEntry.arguments?.getInt("assetId")
+            if (assetId != null) {
+                val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
+                // Ambil data aset yang akan diedit dari ViewModel
+                val assetToEdit by assetViewModel.getAssetById(assetId)
+                    .collectAsStateWithLifecycle(initialValue = null)
+
+                // Tampilkan layar hanya jika data sudah ada
+                assetToEdit?.let {
+                    AddAssetScreen(
+                        assetToEdit = it, // Berikan data ke layar (mode edit)
+                        viewModel = assetViewModel,
+                        onSaveComplete = { navController.popBackStack() },
+                        onNavigateUp = { navController.popBackStack() }
+                    )
+                }
+            }
         }
 
         composable("report_screen") {
@@ -476,7 +578,8 @@ fun BumdesApp(
         ) { backStackEntry ->
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val payableId = backStackEntry.arguments?.getInt("payableId")
-            val payableToEdit by viewModel.getPayableById(payableId ?: -1).collectAsState(initial = null)
+            val payableToEdit by viewModel.getPayableById(payableId ?: -1)
+                .collectAsState(initial = null)
 
             if (payableToEdit != null) {
                 PayableEntryScreen(
@@ -539,7 +642,8 @@ fun BumdesApp(
         ) { backStackEntry ->
             val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val receivableId = backStackEntry.arguments?.getInt("receivableId")
-            val receivableToEdit by viewModel.getReceivableById(receivableId ?: -1).collectAsState(initial = null)
+            val receivableToEdit by viewModel.getReceivableById(receivableId ?: -1)
+                .collectAsState(initial = null)
 
             if (receivableToEdit != null) {
                 ReceivableEntryScreen(
@@ -567,6 +671,57 @@ fun BumdesApp(
                 },
                 onNavigateUp = { navController.popBackStack() }
             )
+        }
+
+        composable("pos_screen") {
+            // Ambil ViewModel utama yang memegang state user
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
+            // Buat instance PosViewModel
+            val posViewModel: PosViewModel = viewModel(factory = posViewModelFactory)
+
+            // Berikan data user dan unit usaha ke PosViewModel saat composable ini aktif
+            LaunchedEffect(userProfile, activeUnitUsaha) {
+                posViewModel.userProfile.value = userProfile
+                posViewModel.activeUnitUsaha.value = activeUnitUsaha
+            }
+
+            PosScreen(
+                posViewModel = posViewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onSaleComplete = { navController.popBackStack() }
+            )
+        }
+
+        composable("sales_report") {
+            val viewModel: SalesReportViewModel = viewModel(factory = salesReportViewModelFactory)
+            SalesReportScreen(
+                viewModel = viewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onSaleClick = { sale ->
+                    // Kirim objek sale sebagai JSON string saat navigasi
+                    val saleJson = Gson().toJson(sale)
+                    navController.navigate("sale_detail/${saleJson}")
+                }
+            )
+        }
+
+        composable(
+            "sale_detail/{saleJson}",
+            arguments = listOf(navArgument("saleJson") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val saleJson = backStackEntry.arguments?.getString("saleJson")
+            if (saleJson != null) {
+                val viewModel: SaleDetailViewModel = viewModel(factory = saleDetailViewModelFactory)
+                val sale = Gson().fromJson(saleJson, Sale::class.java)
+                SaleDetailScreen(
+                    viewModel = viewModel,
+                    sale = sale,
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
