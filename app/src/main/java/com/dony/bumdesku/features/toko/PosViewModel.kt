@@ -9,6 +9,7 @@ import com.dony.bumdesku.repository.PosRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 enum class SaleState {
     IDLE, LOADING, SUCCESS, ERROR
@@ -145,7 +146,11 @@ class PosViewModel(
                 _cartItems.value = emptyList()
                 updateTotalPrice()
                 _saleState.value = SaleState.SUCCESS
-            } catch (e: Exception) {
+            } catch (e: IOException) { // Tangani error stok tidak cukup
+                _saleState.value = SaleState.ERROR
+                Log.e("PosViewModel", "Gagal menyelesaikan penjualan: ${e.message}", e)
+                // Di sini Anda bisa meneruskan e.message ke UI untuk ditampilkan
+            } catch (e: Exception) { // Tangani error umum lainnya
                 _saleState.value = SaleState.ERROR
                 Log.e("PosViewModel", "Gagal menyelesaikan penjualan: ${e.message}", e)
             }

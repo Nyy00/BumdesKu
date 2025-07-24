@@ -18,8 +18,8 @@ interface AssetDao {
     @Query("SELECT * FROM assets ORDER BY name ASC")
     fun getAllAssets(): Flow<List<Asset>>
 
-    @Query("SELECT * FROM assets WHERE localId = :id")
-    fun getAssetById(id: Int): Flow<Asset?>
+    @Query("SELECT * FROM assets WHERE id = :id") // ✅ UBAH: Cari berdasarkan 'id'
+    fun getAssetById(id: String): Flow<Asset?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(assets: List<Asset>)

@@ -148,6 +148,7 @@ fun ProductList(modifier: Modifier = Modifier, products: List<Asset>, onProductC
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // ✅ PERBAIKAN DI SINI: Ubah 'it.localId' menjadi 'it.id'
         items(products.filter { it.quantity > 0 }, key = { it.id }) { product ->
             Card(
                 onClick = { onProductClick(product) },
@@ -156,14 +157,12 @@ fun ProductList(modifier: Modifier = Modifier, products: List<Asset>, onProductC
                 Column(
                     modifier = Modifier
                         .padding(8.dp)
-                        .fillMaxWidth(), // Pastikan kolom mengisi lebar kartu
+                        .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(product.name, fontWeight = FontWeight.Bold, maxLines = 2)
                     Text("Stok: ${product.quantity}")
-                    // --- PERBAIKAN: Tampilkan harga jual di daftar produk ---
                     Text(formatCurrency(product.sellingPrice))
-                    // --------------------------------------------------------
                 }
             }
         }

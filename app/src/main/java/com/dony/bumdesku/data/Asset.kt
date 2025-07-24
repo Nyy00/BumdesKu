@@ -5,9 +5,10 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "assets")
 data class Asset(
-    @PrimaryKey(autoGenerate = true)
-    val localId: Int = 0,
-    var id: String = "",
+    @PrimaryKey // ✅ UBAH: Jadikan 'id' sebagai Primary Key
+    var id: String = "", // Jadikan 'var' agar bisa diisi dari Firestore
+
+    // localId tidak lagi dibutuhkan sebagai Primary Key
     var userId: String = "",
     val unitUsahaId: String = "",
     val name: String = "",
@@ -18,5 +19,6 @@ data class Asset(
     val imageUrl: String = "",
     val category: String = "Lain-lain"
 ) {
-    constructor() : this(0, "", "", "", "", "", 0, 0.0, 0.0, "", "Lain-lain")
+    // Konstruktor kosong tetap diperlukan untuk Firestore
+    constructor() : this("", "", "", "", "", 0, 0.0, 0.0, "", "Lain-lain")
 }

@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.data.UserProfile
+import com.dony.bumdesku.repository.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,40 +30,135 @@ enum class AuthState {
     IDLE, LOADING, SUCCESS, ERROR
 }
 
-class AuthViewModel : ViewModel() {
+class AuthViewModel(
+    private val unitUsahaRepository: UnitUsahaRepository,
+    private val transactionRepository: TransactionRepository,
+    private val assetRepository: AssetRepository,
+    private val posRepository: PosRepository,
+    private val accountRepository: AccountRepository
+) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
     private val firestore = Firebase.firestore
+    private val activeListeners = mutableListOf<ListenerRegistration>()
 
     private val _authState = MutableStateFlow(AuthState.IDLE)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
-
     private val _loginNavigationState = MutableStateFlow(LoginNavigationState.IDLE)
     val loginNavigationState: StateFlow<LoginNavigationState> = _loginNavigationState.asStateFlow()
-
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
-
     private val _activeUnitUsaha = MutableStateFlow<UnitUsaha?>(null)
     val activeUnitUsaha: StateFlow<UnitUsaha?> = _activeUnitUsaha.asStateFlow()
-
     private val _userUnitUsahaList = MutableStateFlow<List<UnitUsaha>>(emptyList())
     val userUnitUsahaList: StateFlow<List<UnitUsaha>> = _userUnitUsahaList.asStateFlow()
-
     private val _allUnitUsahaList = MutableStateFlow<List<UnitUsaha>>(emptyList())
     val allUnitUsahaList: StateFlow<List<UnitUsaha>> = _allUnitUsahaList.asStateFlow()
-
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
-    private val _targetUserId = MutableStateFlow<String?>(null)
-    val targetUserId: StateFlow<String?> = _targetUserId.asStateFlow()
 
     init {
         auth.currentUser?.uid?.let { userId ->
             loadUserSessionData(userId)
         }
         fetchAllUnitUsahaForRegistration()
+    }
+
+    private fun clearActiveListeners() {
+        activeListeners.forEach { it.remove() }
+        activeListeners.clear()
+        Log.d("AuthViewModel", "All active listeners have been cleared.")
+    }
+
+    private fun triggerSyncForManagerAndAuditor() {
+        clearActiveListeners() // Selalu bersihkan listener lama terlebih dahulu
+        try {
+            Log.d("AuthViewModel", "Manager/Auditor sync started.")
+            activeListeners.add(accountRepository.syncAccounts(auth.currentUser!!.uid))
+            activeListeners.add(unitUsahaRepository.syncAllUnitUsahaForManager())
+            activeListeners.add(assetRepository.syncAllAssetsForManager())
+            activeListeners.add(transactionRepository.syncAllTransactionsForManager())
+            activeListeners.add(posRepository.syncAllSalesForManager())
+        } catch (e: Exception) {
+            Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
+        }
+    }
+
+    private fun loadUserSessionData(userId: String, isLoginProcess: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val snapshot = firestore.collection("users").document(userId).get().await()
+                val profile = snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
+                _userProfile.update { profile }
+
+                when (profile?.role) {
+                    "manager", "auditor" -> {
+                        triggerSyncForManagerAndAuditor()
+                        if (isLoginProcess) {
+                            _loginNavigationState.update { LoginNavigationState.NAVIGATE_TO_HOME_UMUM }
+                        }
+                    }
+                    "pengurus" -> {
+                        clearActiveListeners() // Bersihkan listener lama
+                        activeListeners.add(accountRepository.syncAccounts(userId))
+
+                        if (profile.managedUnitUsahaIds.isNotEmpty()) {
+                            activeListeners.add(transactionRepository.syncTransactionsForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(assetRepository.syncAssetsForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(posRepository.syncSalesForUser(profile.managedUnitUsahaIds))
+                        }
+
+                        fetchUserManagedUnitUsaha(profile, isLoginProcess)
+                    }
+                    else -> {
+                        clearActiveListeners() // Bersihkan untuk pengguna tanpa peran
+                        activeListeners.add(accountRepository.syncAccounts(userId))
+                    }
+                }
+
+            } catch (e: Exception) {
+                _errorMessage.update { "Gagal memuat profil pengguna." }
+                if (isLoginProcess) _authState.update { AuthState.ERROR }
+            }
+        }
+    }
+
+    private fun fetchUserManagedUnitUsaha(userProfile: UserProfile?, isLoginProcess: Boolean) {
+        viewModelScope.launch {
+            if (userProfile == null || userProfile.managedUnitUsahaIds.isEmpty()) {
+                _userUnitUsahaList.update { emptyList() }
+                if (isLoginProcess) _loginNavigationState.update { LoginNavigationState.NAVIGATE_TO_HOME_UMUM }
+                return@launch
+            }
+
+            try {
+                val snapshot = firestore.collection("unit_usaha")
+                    .whereIn(FieldPath.documentId(), userProfile.managedUnitUsahaIds.take(30))
+                    .get().await()
+
+                val unitUsahaWithIds = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(UnitUsaha::class.java)?.apply { id = doc.id }
+                }
+                _userUnitUsahaList.update { unitUsahaWithIds }
+
+                if (unitUsahaWithIds.size == 1) {
+                    setActiveUnitUsaha(unitUsahaWithIds.first())
+                }
+
+                if (isLoginProcess) {
+                    val navState = when {
+                        unitUsahaWithIds.size > 1 -> LoginNavigationState.NAVIGATE_TO_SELECTION
+                        unitUsahaWithIds.size == 1 -> LoginNavigationState.NAVIGATE_TO_HOME_SPESIFIK
+                        else -> LoginNavigationState.NAVIGATE_TO_HOME_UMUM
+                    }
+                    _loginNavigationState.update { navState }
+                }
+
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Gagal mengambil unit usaha yang dikelola: ${e.message}", e)
+                if (isLoginProcess) _loginNavigationState.update { LoginNavigationState.NAVIGATE_TO_HOME_UMUM }
+            }
+        }
     }
 
     fun loginUser(email: String, pass: String) {
@@ -104,8 +201,8 @@ class AuthViewModel : ViewModel() {
 
     fun logout() {
         auth.signOut()
+        clearActiveListeners()
         _userProfile.update { null }
-        _targetUserId.update { null }
         _userUnitUsahaList.update { emptyList() }
         _activeUnitUsaha.update { null }
     }
@@ -139,67 +236,6 @@ class AuthViewModel : ViewModel() {
         _loginNavigationState.update { LoginNavigationState.IDLE }
     }
 
-    private fun loadUserSessionData(userId: String, isLoginProcess: Boolean = false) {
-        viewModelScope.launch {
-            try {
-                val snapshot = firestore.collection("users").document(userId).get().await()
-                val profile = snapshot.toObject(UserProfile::class.java)?.copy(uid = userId)
-                _userProfile.update { profile }
-
-                determineTargetUserId(profile)
-                fetchUserManagedUnitUsaha(profile, isLoginProcess)
-
-            } catch (e: Exception) {
-                _errorMessage.update { "Gagal memuat profil pengguna." }
-                if (isLoginProcess) _authState.update { AuthState.ERROR }
-            }
-        }
-    }
-
-    // --- FUNGSI INI DIPERBAIKI SECARA FINAL ---
-    private fun fetchUserManagedUnitUsaha(userProfile: UserProfile?, isLoginProcess: Boolean) {
-        viewModelScope.launch {
-            if (userProfile == null || userProfile.managedUnitUsahaIds.isEmpty()) {
-                _userUnitUsahaList.update { emptyList() }
-                if (isLoginProcess) _loginNavigationState.update { LoginNavigationState.NAVIGATE_TO_HOME_UMUM }
-                return@launch
-            }
-
-            try {
-                val snapshot = firestore.collection("unit_usaha")
-                    .whereIn(FieldPath.documentId(), userProfile.managedUnitUsahaIds)
-                    .get().await()
-
-                val unitUsahaWithIds = snapshot.toObjects(UnitUsaha::class.java).mapIndexed { i, unit ->
-                    unit.apply { id = snapshot.documents[i].id }
-                }
-                _userUnitUsahaList.update { unitUsahaWithIds }
-
-                // --- LOGIKA KUNCI ADA DI SINI ---
-                // Jika hanya ada satu unit usaha, langsung set sebagai aktif.
-                // Ini akan berjalan baik saat login maupun saat aplikasi restart.
-                if (unitUsahaWithIds.size == 1) {
-                    setActiveUnitUsaha(unitUsahaWithIds.first())
-                }
-                // ---------------------------------
-
-                // Logika navigasi hanya dijalankan saat proses login baru.
-                if (isLoginProcess) {
-                    val navState = when {
-                        unitUsahaWithIds.size > 1 -> LoginNavigationState.NAVIGATE_TO_SELECTION
-                        unitUsahaWithIds.size == 1 -> LoginNavigationState.NAVIGATE_TO_HOME_SPESIFIK
-                        else -> LoginNavigationState.NAVIGATE_TO_HOME_UMUM
-                    }
-                    _loginNavigationState.update { navState }
-                }
-
-            } catch (e: Exception) {
-                Log.e("AuthViewModel", "Gagal mengambil unit usaha yang dikelola: ${e.message}")
-                if (isLoginProcess) _loginNavigationState.update { LoginNavigationState.NAVIGATE_TO_HOME_UMUM }
-            }
-        }
-    }
-
     private fun fetchAllUnitUsahaForRegistration() {
         viewModelScope.launch {
             try {
@@ -214,14 +250,8 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    private fun determineTargetUserId(profile: UserProfile?) {
-        viewModelScope.launch {
-            if (profile?.role == "auditor") {
-                val pengurusQuery = firestore.collection("users").whereEqualTo("role", "pengurus").limit(1).get().await()
-                _targetUserId.update { pengurusQuery.documents.firstOrNull()?.id }
-            } else {
-                _targetUserId.update { profile?.uid }
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        clearActiveListeners()
     }
 }

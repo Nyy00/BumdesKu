@@ -23,17 +23,11 @@ import com.google.gson.Gson
 import com.dony.bumdesku.features.toko.report.SaleDetailScreen
 import com.dony.bumdesku.features.toko.report.SaleDetailViewModel
 import com.dony.bumdesku.features.toko.report.SaleDetailViewModelFactory
-import com.dony.bumdesku.repository.AccountRepository
-import com.dony.bumdesku.repository.AssetRepository
-import com.dony.bumdesku.repository.DebtRepository
-import com.dony.bumdesku.repository.TransactionRepository
-import com.dony.bumdesku.repository.UnitUsahaRepository
+import com.dony.bumdesku.repository.*
 import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.features.toko.PosScreen
 import com.dony.bumdesku.features.toko.PosViewModel
 import com.dony.bumdesku.features.toko.PosViewModelFactory
-import com.dony.bumdesku.repository.PosRepository
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.google.firebase.auth.ktx.auth
@@ -44,31 +38,39 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Inisialisasi Database dan Repositori (tidak ada perubahan di sini)
         val database = BumdesDatabase.getDatabase(this)
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
         val assetDao = database.assetDao()
         val accountDao = database.accountDao()
         val debtDao = database.debtDao()
+        val saleDao = database.saleDao() // Pastikan ini ada
 
         val accountRepository = AccountRepository(accountDao)
-        val transactionRepository = TransactionRepository(transactionDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
         val assetRepository = AssetRepository(assetDao)
+        val transactionRepository = TransactionRepository(transactionDao)
         val debtRepository = DebtRepository(debtDao)
+        val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
 
+        // Inisialisasi ViewModel Factories (tidak ada perubahan di sini)
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
-        val authViewModelFactory = AuthViewModelFactory()
         val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
-
-        val saleDao = database.saleDao()
-        val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
         val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
 
+        // AuthViewModelFactory sekarang membutuhkan semua repositori
+        val authViewModelFactory = AuthViewModelFactory(
+            unitUsahaRepository,
+            transactionRepository,
+            assetRepository,
+            posRepository,
+            accountRepository
+        )
 
         setContent {
             BumdesKuTheme {
@@ -80,29 +82,13 @@ class MainActivity : ComponentActivity() {
                     debtViewModelFactory = debtViewModelFactory,
                     salesReportViewModelFactory = salesReportViewModelFactory,
                     saleDetailViewModelFactory = saleDetailViewModelFactory,
-                    posViewModelFactory = posViewModelFactory,
-                    repositories = AppRepositories(
-                        unitUsaha = unitUsahaRepository,
-                        asset = assetRepository,
-                        account = accountRepository,
-                        transaction = transactionRepository,
-                        debt = debtRepository,
-                        posRepository = posRepository
-                    )
+                    posViewModelFactory = posViewModelFactory
+                    // Kita tidak perlu lagi meneruskan AppRepositories
                 )
             }
         }
     }
 }
-
-data class AppRepositories(
-    val unitUsaha: UnitUsahaRepository,
-    val asset: AssetRepository,
-    val account: AccountRepository,
-    val transaction: TransactionRepository,
-    val debt: DebtRepository,
-    val posRepository: PosRepository
-)
 
 @Composable
 fun BumdesApp(
@@ -113,31 +99,17 @@ fun BumdesApp(
     debtViewModelFactory: DebtViewModelFactory,
     salesReportViewModelFactory: SalesReportViewModelFactory,
     saleDetailViewModelFactory: SaleDetailViewModelFactory,
-    posViewModelFactory: PosViewModelFactory,
-    repositories: AppRepositories
+    posViewModelFactory: PosViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
     val context = LocalContext.current
 
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-    val transactionViewModel: TransactionViewModel =
-        viewModel(factory = transactionViewModelFactory)
+    val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
 
-    val targetUserId by authViewModel.targetUserId.collectAsStateWithLifecycle()
-    LaunchedEffect(targetUserId) {
-        if (targetUserId != null) {
-            repositories.unitUsaha.syncUnitUsaha(targetUserId!!)
-            repositories.asset.syncAssets(targetUserId!!)
-            repositories.account.syncAccounts(targetUserId!!)
-            repositories.transaction.syncTransactions(targetUserId!!)
-            repositories.debt.syncPayables(targetUserId!!)
-            repositories.debt.syncReceivables(targetUserId!!)
-            // --- TAMBAHKAN BARIS INI ---
-            repositories.posRepository.syncSales(targetUserId!!)
-            // ---------------------------
-        }
-    }
+    // ✅ BLOK KODE YANG ANDA TUNJUKKAN TELAH DIHAPUS SELURUHNYA
+    // Semua logika sinkronisasi sekarang ada di dalam AuthViewModel.
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
@@ -435,7 +407,7 @@ fun BumdesApp(
                 userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
                 onAddAssetClick = { navController.navigate("add_asset") },
                 onItemClick = { asset ->
-                    navController.navigate("edit_asset/${asset.localId}")
+                    navController.navigate("edit_asset/${asset.id}")
                 },
                 onNavigateUp = { navController.popBackStack() },
                 onDeleteClick = { asset -> assetViewModel.delete(asset) }
@@ -460,15 +432,18 @@ fun BumdesApp(
 
         composable(
             "edit_asset/{assetId}",
-            arguments = listOf(navArgument("assetId") { type = NavType.IntType })
+            // ✅ UBAH 1: Tipe argumen di sini harus StringType
+            arguments = listOf(navArgument("assetId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val assetId = backStackEntry.arguments?.getInt("assetId")
+            // ✅ UBAH 2: Ambil argumen sebagai String, bukan Int
+            val assetId = backStackEntry.arguments?.getString("assetId")
             if (assetId != null) {
                 val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
                 val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
                 val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
 
                 val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
+                // ✅ UBAH 3: Panggil fungsi ViewModel dengan assetId yang sekarang sudah String
                 val assetToEdit by assetViewModel.getAssetById(assetId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
@@ -476,15 +451,14 @@ fun BumdesApp(
                     AddAssetScreen(
                         assetToEdit = it,
                         viewModel = assetViewModel,
-                        userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
-                        activeUnitUsaha = activeUnitUsaha, // Berikan unit usaha yang aktif
+                        userRole = userProfile?.role ?: "pengurus",
+                        activeUnitUsaha = activeUnitUsaha,
                         onSaveComplete = { navController.popBackStack() },
                         onNavigateUp = { navController.popBackStack() }
                     )
                 }
             }
         }
-
         composable("report_screen") {
 
             // Ambil semua state yang relevan dari ViewModel

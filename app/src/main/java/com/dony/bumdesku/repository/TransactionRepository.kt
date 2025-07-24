@@ -5,6 +5,7 @@ import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.TransactionDao
 import com.dony.bumdesku.data.UserProfile
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ListenerRegistration // PASTIKAN IMPORT INI ADA
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
@@ -23,56 +24,65 @@ class TransactionRepository(
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
 
-    fun syncTransactions(targetUserId: String) {
-        scope.launch {
-            try {
-                val userProfileSnapshot = firestore.collection("users").document(targetUserId).get().await()
-                val userProfile = userProfileSnapshot.toObject<UserProfile>()
-
-                if (userProfile == null) {
-                    Log.w("TransactionRepository", "Profil untuk $targetUserId tidak ditemukan.")
-                    return@launch
+    fun syncTransactionsForUnit(unitId: String): ListenerRegistration {
+        return firestore.collection("transactions").whereEqualTo("unitUsahaId", unitId)
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("TransactionRepository", "Listen for unit transactions failed.", e)
+                    return@addSnapshotListener
                 }
-
-                // --- LOGIKA BARU UNTUK PERAN YANG BERBEDA ---
-                val query = if (userProfile.role == "manager" || userProfile.role == "auditor") {
-                    // Jika manajer atau auditor, ambil SEMUA transaksi
-                    Log.d("TransactionRepository", "Mode Manajer/Auditor: Mengambil semua transaksi.")
-                    firestore.collection("transactions")
-                } else {
-                    // Jika pengurus biasa, ambil transaksi berdasarkan unit usaha yang dikelola
-                    val managedIds = userProfile.managedUnitUsahaIds
-                    if (managedIds.isEmpty()) {
-                        Log.w("TransactionRepository", "Pengurus $targetUserId tidak punya unit usaha, tidak ada transaksi untuk disinkronkan.")
-                        transactionDao.deleteAll()
-                        return@launch
-                    }
-                    Log.d("TransactionRepository", "Mode Pengurus: Mengambil transaksi untuk unit ${managedIds}.")
-                    firestore.collection("transactions").whereIn("unitUsahaId", managedIds.take(10))
+                scope.launch {
+                    val firestoreTransactions = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject<Transaction>()?.apply { id = doc.id }
+                    } ?: emptyList()
+                    transactionDao.insertAll(firestoreTransactions)
                 }
-                // ---------------------------------------------
-
-                query.addSnapshotListener { snapshots, e ->
-                    if (e != null) {
-                        Log.w("TransactionRepository", "Listen failed.", e)
-                        return@addSnapshotListener
-                    }
-                    scope.launch(Dispatchers.IO) {
-                        val firestoreTransactions = snapshots?.documents?.mapNotNull { doc ->
-                            doc.toObject<Transaction>()?.apply { id = doc.id }
-                        } ?: emptyList()
-
-                        transactionDao.deleteAll()
-                        transactionDao.insertAll(firestoreTransactions)
-                        Log.d("TransactionRepository", "Sinkronisasi berhasil: ${firestoreTransactions.size} transaksi diterima.")
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e("TransactionRepository", "Gagal melakukan sinkronisasi transaksi: ", e)
             }
-        }
     }
+
+    suspend fun clearLocalTransactions() {
+        transactionDao.deleteAll()
+    }
+
+    /**
+     * ✅ FUNGSI BARU UNTUK PENGGUNA (PENGURUS)
+     */
+    fun syncTransactionsForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("transactions").whereIn("unitUsahaId", managedUnitIds.take(30))
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("TransactionRepository", "Listen failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch(Dispatchers.IO) {
+                    val firestoreTransactions = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject<Transaction>()?.apply { id = doc.id }
+                    } ?: emptyList()
+
+                    transactionDao.deleteAll()
+                    transactionDao.insertAll(firestoreTransactions)
+                }
+            }
+    }
+
+    fun syncAllTransactionsForManager(): ListenerRegistration {
+        return firestore.collection("transactions")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("TransactionRepository", "Listen for ALL transactions failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch(Dispatchers.IO) {
+                    val transactions = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject<Transaction>()?.apply { id = doc.id }
+                    } ?: emptyList()
+                    transactionDao.deleteAll()
+                    transactionDao.insertAll(transactions)
+                }
+            }
+    }
+
+    // FUNGSI syncTransactions(targetUserId: String) YANG LAMA SEKARANG DIHAPUS
 
     suspend fun insert(transaction: Transaction) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")

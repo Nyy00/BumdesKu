@@ -2,6 +2,7 @@ package com.dony.bumdesku.repository
 
 import android.util.Log
 import com.dony.bumdesku.data.*
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -12,6 +13,7 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.tasks.await
+import java.io.IOException
 
 class PosRepository(
     private val saleDao: SaleDao,
@@ -22,56 +24,64 @@ class PosRepository(
     private val firestore = Firebase.firestore
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    fun syncSalesForUnit(unitId: String): ListenerRegistration {
+        return firestore.collection("sales").whereEqualTo("unitUsahaId", unitId)
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("PosRepository", "Listen for unit sales failed for $unitId", e)
+                    return@addSnapshotListener
+                }
+                scope.launch {
+                    val sales = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject(Sale::class.java)
+                    } ?: emptyList()
+                    saleDao.insertAll(sales)
+                }
+            }
+    }
+
+    suspend fun clearLocalSales() {
+        saleDao.deleteAll()
+    }
+
     fun getAllSales(): Flow<List<Sale>> {
         return saleDao.getAllSales()
     }
 
-    fun syncSales(targetUserId: String) {
-        scope.launch {
-            try {
-                val userProfileSnapshot = firestore.collection("users").document(targetUserId).get().await()
-                val userProfile = userProfileSnapshot.toObject(UserProfile::class.java)
-
-                if (userProfile == null) {
-                    Log.w("PosRepository", "Profil untuk $targetUserId tidak ditemukan.")
-                    return@launch
+    fun syncSalesForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("sales").whereIn("unitUsahaId", managedUnitIds.take(30))
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("PosRepository", "Listen for sales failed.", e)
+                    return@addSnapshotListener
                 }
-
-                val query = if (userProfile.role == "manager" || userProfile.role == "auditor") {
-                    firestore.collection("sales")
-                } else {
-                    val managedIds = userProfile.managedUnitUsahaIds
-                    if (managedIds.isEmpty()) {
-                        saleDao.deleteAll()
-                        return@launch
-                    }
-                    firestore.collection("sales").whereIn("unitUsahaId", managedIds.take(10))
+                scope.launch(Dispatchers.IO) {
+                    val sales = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject(Sale::class.java)
+                    } ?: emptyList()
+                    saleDao.deleteAll()
+                    saleDao.insertAll(sales)
                 }
-
-                query.addSnapshotListener { snapshots, e ->
-                    if (e != null) {
-                        Log.w("PosRepository", "Listen for sales failed.", e)
-                        return@addSnapshotListener
-                    }
-                    scope.launch(Dispatchers.IO) {
-                        val sales = snapshots?.documents?.mapNotNull { doc ->
-                            // --- PERBAIKI BAGIAN INI ---
-                            val sale = doc.toObject(Sale::class.java)
-                            // Karena 'id' di Sale adalah 'val', kita tidak bisa mengubahnya.
-                            // Kita tidak perlu mengubah ID-nya di sini, karena ID dari Room (auto-generate) sudah cukup.
-                            sale
-                            // -------------------------
-                        } ?: emptyList()
-                        saleDao.deleteAll()
-                        saleDao.insertAll(sales)
-                        Log.d("PosRepository", "Sinkronisasi penjualan berhasil: ${sales.size} data diterima.")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("PosRepository", "Gagal sinkronisasi penjualan: ", e)
             }
-        }
     }
+
+    fun syncAllSalesForManager(): ListenerRegistration {
+        return firestore.collection("sales")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("PosRepository", "Listen for ALL sales failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch(Dispatchers.IO) {
+                    val sales = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject(Sale::class.java)
+                    } ?: emptyList()
+                    saleDao.deleteAll()
+                    saleDao.insertAll(sales)
+                }
+            }
+    }
+
     suspend fun processSale(
         cartItems: List<CartItem>,
         totalPrice: Double,
@@ -79,6 +89,15 @@ class PosRepository(
         activeUnitUsaha: UnitUsaha
     ) {
         withContext(Dispatchers.IO) {
+            // --- VALIDASI STOK SEBELUM TRANSAKSI ---
+            for (cartItem in cartItems) {
+                // ✅ PERBAIKAN DI SINI: Gunakan 'asset.id' bukan 'asset.localId'
+                val assetInDb = assetRepository.getAssetById(cartItem.asset.id).first()
+                if (assetInDb == null || assetInDb.quantity < cartItem.quantity) {
+                    throw IOException("Stok untuk ${cartItem.asset.name} tidak mencukupi. Sisa: ${assetInDb?.quantity ?: 0}")
+                }
+            }
+
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
             val pendapatanAccount = allAccounts.find { it.accountNumber == "413" }
@@ -94,7 +113,6 @@ class PosRepository(
                 userId = user.uid,
                 unitUsahaId = activeUnitUsaha.id
             )
-            // Simpan ke firestore, bukan DAO lokal
             firestore.collection("sales").add(sale).await()
 
             val transaction = Transaction(

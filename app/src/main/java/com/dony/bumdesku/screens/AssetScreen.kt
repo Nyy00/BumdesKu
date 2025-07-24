@@ -129,9 +129,11 @@ fun AssetListScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(assets, key = { it.localId }) { asset ->
+                    // ✅ UBAH KEY DARI localId MENJADI id
+                    items(assets, key = { it.id }) { asset ->
                         AssetItem(
                             asset = asset,
+                            // ✅ UBAH PARAMETER DARI asset.localId MENJADI asset.id
                             onItemClick = { onItemClick(asset) },
                             onDeleteClick = { assetToDelete = asset }
                         )

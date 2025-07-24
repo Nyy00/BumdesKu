@@ -17,28 +17,23 @@ enum class UploadState { IDLE, UPLOADING, SUCCESS, ERROR }
 
 class AssetViewModel(
     private val repository: AssetRepository,
-    // Tambahkan UnitUsahaRepository untuk mengambil daftar unit usaha
     private val unitUsahaRepository: UnitUsahaRepository
 ) : ViewModel() {
 
-    // --- State Baru untuk Filter ---
     private val _selectedUnitFilter = MutableStateFlow<UnitUsaha?>(null)
     val selectedUnitFilter: StateFlow<UnitUsaha?> = _selectedUnitFilter.asStateFlow()
 
-    // StateFlow ini akan berisi daftar aset yang sudah difilter
     val filteredAssets: StateFlow<List<Asset>> = combine(
         repository.allAssets,
         _selectedUnitFilter
     ) { assets, selectedUnit ->
         if (selectedUnit == null) {
-            assets // Jika tidak ada filter, tampilkan semua
+            assets
         } else {
             assets.filter { it.unitUsahaId == selectedUnit.id }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    // -----------------------------
 
-    // State untuk mengambil semua unit usaha (untuk dropdown filter)
     val allUnitUsaha: Flow<List<UnitUsaha>> = unitUsahaRepository.allUnitUsaha
 
     val allCategories: StateFlow<List<String>> = repository.allAssets
@@ -48,21 +43,23 @@ class AssetViewModel(
     private val _uploadState = MutableStateFlow(UploadState.IDLE)
     val uploadState: StateFlow<UploadState> = _uploadState.asStateFlow()
 
-    fun getAssetById(id: Int): Flow<Asset?> {
+    /**
+     * ✅ PERBAIKAN UTAMA DI SINI
+     * Ubah parameter 'id' dari Int menjadi String agar sesuai dengan
+     * perubahan yang telah kita buat di DAO dan MainActivity.
+     */
+    fun getAssetById(id: String): Flow<Asset?> { // <-- PASTIKAN PARAMETERNYA ADALAH STRING
         return repository.getAssetById(id)
     }
 
-    // --- Fungsi Baru untuk Mengatur Filter ---
     fun selectUnitFilter(unitUsaha: UnitUsaha?) {
         _selectedUnitFilter.value = unitUsaha
     }
-    // ---------------------------------------
 
     fun insert(asset: Asset, imageUri: Uri?) {
         viewModelScope.launch {
             _uploadState.value = UploadState.UPLOADING
             try {
-                // ID sekarang dibuat di repository untuk konsistensi
                 repository.insert(asset, imageUri)
                 _uploadState.value = UploadState.SUCCESS
             } catch (e: Exception) {
@@ -85,7 +82,6 @@ class AssetViewModel(
     }
 }
 
-// Perbarui Factory untuk menerima UnitUsahaRepository
 class AssetViewModelFactory(
     private val repository: AssetRepository,
     private val unitUsahaRepository: UnitUsahaRepository

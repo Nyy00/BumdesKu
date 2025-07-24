@@ -6,6 +6,7 @@ import com.dony.bumdesku.data.Asset
 import com.dony.bumdesku.data.AssetDao
 import com.dony.bumdesku.data.UserProfile
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ListenerRegistration // PASTIKAN IMPORT INI ADA
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
@@ -26,55 +27,65 @@ class AssetRepository(private val assetDao: AssetDao) {
 
     val allAssets: Flow<List<Asset>> = assetDao.getAllAssets()
 
-    // --- FUNGSI SINKRONISASI DIPERBARUI UNTUK MANAJER ---
-    fun syncAssets(targetUserId: String) {
-        scope.launch {
-            try {
-                val userProfileSnapshot = firestore.collection("users").document(targetUserId).get().await()
-                val userProfile = userProfileSnapshot.toObject<UserProfile>()
-
-                if (userProfile == null) {
-                    Log.w("AssetRepository", "Profil untuk $targetUserId tidak ditemukan.")
-                    return@launch
+    fun syncAssetsForUnit(unitId: String): ListenerRegistration {
+        return firestore.collection("assets").whereEqualTo("unitUsahaId", unitId)
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("AssetRepository", "Listen for unit assets failed for $unitId", e)
+                    return@addSnapshotListener
                 }
-
-                val query = if (userProfile.role == "manager" || userProfile.role == "auditor") {
-                    Log.d("AssetRepository", "Mode Manajer/Auditor: Mengambil semua aset.")
-                    firestore.collection("assets")
-                } else {
-                    val managedIds = userProfile.managedUnitUsahaIds
-                    if (managedIds.isEmpty()) {
-                        Log.w("AssetRepository", "Pengurus $targetUserId tidak punya unit usaha, tidak ada aset untuk disinkronkan.")
-                        assetDao.deleteAll()
-                        return@launch
-                    }
-                    Log.d("AssetRepository", "Mode Pengurus: Mengambil aset untuk unit ${managedIds}.")
-                    firestore.collection("assets").whereIn("unitUsahaId", managedIds.take(10))
+                scope.launch {
+                    val assets = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject<Asset>()?.apply { id = doc.id }
+                    } ?: emptyList()
+                    assetDao.insertAll(assets)
                 }
-
-                query.addSnapshotListener { snapshots, e ->
-                    if (e != null) {
-                        Log.w("AssetRepository", "Listen for assets failed.", e)
-                        return@addSnapshotListener
-                    }
-                    scope.launch(Dispatchers.IO) {
-                        val assets = snapshots?.documents?.mapNotNull { doc ->
-                            doc.toObject<Asset>()?.apply { id = doc.id }
-                        } ?: emptyList()
-
-                        assetDao.deleteAll()
-                        assetDao.insertAll(assets)
-                        Log.d("AssetRepository", "Sinkronisasi aset berhasil: ${assets.size} aset diterima.")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("AssetRepository", "Gagal melakukan sinkronisasi aset: ", e)
             }
-        }
     }
-    // ----------------------------------------------------
 
-    fun getAssetById(id: Int): Flow<Asset?> {
+    suspend fun clearLocalAssets() {
+        assetDao.deleteAll()
+    }
+
+
+    fun syncAssetsForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("assets").whereIn("unitUsahaId", managedUnitIds.take(30))
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("AssetRepository", "Listen for user assets failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch(Dispatchers.IO) {
+                    val assets = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject(Asset::class.java)?.apply { id = doc.id }
+                    } ?: emptyList()
+
+                    // Hapus semua data aset lama di lokal
+                    assetDao.deleteAll()
+                    // Masukkan daftar aset yang baru dan bersih dari server
+                    assetDao.insertAll(assets)
+                }
+            }
+    }
+
+    fun syncAllAssetsForManager(): ListenerRegistration {
+        return firestore.collection("assets")
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("AssetRepository", "Listen for ALL assets failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch(Dispatchers.IO) {
+                    val assets = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject(Asset::class.java)?.apply { id = doc.id }
+                    } ?: emptyList()
+                    assetDao.deleteAll()
+                    assetDao.insertAll(assets)
+                }
+            }
+    }
+
+    fun getAssetById(id: String): Flow<Asset?> {
         return assetDao.getAssetById(id)
     }
 
