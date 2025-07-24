@@ -23,9 +23,10 @@ class AccountRepository(private val accountDao: AccountDao) {
 
     val allAccounts: Flow<List<Account>> = accountDao.getAllAccounts()
 
-    // --- FUNGSI SINKRONISASI DIPERBARUI UNTUK SEMUA PENGGUNA ---
+    // --- FUNGSI SINKRONISASI DIPERBARUI TOTAL ---
     fun syncAccounts(targetUserId: String) {
-        // Cari ID pengurus utama/manajer pertama sebagai sumber daftar akun (COA)
+        // Langkah 1: Cari ID pengguna pertama yang memiliki peran 'manager' atau 'pengurus'.
+        // Ini akan menjadi sumber kebenaran (source of truth) untuk Chart of Accounts (COA).
         firestore.collection("users")
             .whereIn("role", listOf("manager", "pengurus"))
             .limit(1)
@@ -37,11 +38,11 @@ class AccountRepository(private val accountDao: AccountDao) {
                     return@addOnSuccessListener
                 }
 
-                // Dengarkan perubahan pada daftar akun milik pengurus utama
+                // Langkah 2: Dengarkan (listen) perubahan pada daftar akun milik 'mainOwnerId'.
                 firestore.collection("accounts").whereEqualTo("userId", mainOwnerId)
                     .addSnapshotListener { snapshots, e ->
                         if (e != null) {
-                            Log.w("AccountRepository", "Listen failed.", e)
+                            Log.w("AccountRepository", "Listen for accounts failed.", e)
                             return@addSnapshotListener
                         }
 
@@ -50,7 +51,7 @@ class AccountRepository(private val accountDao: AccountDao) {
                                 doc.toObject<Account>().apply { id = doc.id }
                             } ?: emptyList()
 
-                            // Hapus semua akun lokal dan ganti dengan daftar terbaru
+                            // Langkah 3: Hapus semua akun lokal dan ganti dengan daftar terbaru.
                             // Ini memastikan semua pengguna (manajer, pengurus toko, dll.)
                             // memiliki daftar akun (COA) yang sama dan terbaru.
                             accountDao.deleteAll()

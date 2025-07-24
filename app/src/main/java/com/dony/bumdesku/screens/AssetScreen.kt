@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.rememberAsyncImagePainter
 import com.dony.bumdesku.data.Asset
+import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import com.dony.bumdesku.viewmodel.AssetViewModel
 import com.dony.bumdesku.viewmodel.UploadState
@@ -41,12 +42,16 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssetListScreen(
-    assets: List<Asset>,
+    viewModel: AssetViewModel,
+    userRole: String,
     onAddAssetClick: () -> Unit,
     onItemClick: (Asset) -> Unit,
     onNavigateUp: () -> Unit,
     onDeleteClick: (Asset) -> Unit
 ) {
+    val assets by viewModel.filteredAssets.collectAsStateWithLifecycle()
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedUnit by viewModel.selectedUnitFilter.collectAsStateWithLifecycle()
     var assetToDelete by remember { mutableStateOf<Asset?>(null) }
 
     Scaffold(
@@ -66,22 +71,71 @@ fun AssetListScreen(
             }
         }
     ) { paddingValues ->
-        if (assets.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
-                Text("Belum ada aset yang ditambahkan.")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(assets, key = { it.localId }) { asset ->
-                    AssetItem(
-                        asset = asset,
-                        onItemClick = { onItemClick(asset) },
-                        onDeleteClick = { assetToDelete = asset }
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)) {
+
+            if (userRole == "manager") {
+                var isExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = isExpanded,
+                    onExpandedChange = { isExpanded = !isExpanded },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnit?.name ?: "Semua Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Filter Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
                     )
+                    ExposedDropdownMenu(
+                        expanded = isExpanded,
+                        onDismissRequest = { isExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Semua Unit Usaha") },
+                            onClick = {
+                                viewModel.selectUnitFilter(null)
+                                isExpanded = false
+                            }
+                        )
+                        allUnitUsaha.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    viewModel.selectUnitFilter(unit)
+                                    isExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (assets.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(if (selectedUnit != null) "Tidak ada aset untuk unit ini." else "Belum ada aset yang ditambahkan.")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(assets, key = { it.localId }) { asset ->
+                        AssetItem(
+                            asset = asset,
+                            onItemClick = { onItemClick(asset) },
+                            onDeleteClick = { assetToDelete = asset }
+                        )
+                    }
                 }
             }
         }
@@ -168,6 +222,8 @@ fun AssetItem(
 fun AddAssetScreen(
     assetToEdit: Asset? = null,
     viewModel: AssetViewModel,
+    userRole: String,
+    activeUnitUsaha: UnitUsaha?,
     onSaveComplete: () -> Unit,
     onNavigateUp: () -> Unit
 ) {
@@ -180,11 +236,7 @@ fun AddAssetScreen(
     var purchasePrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-
-    // --- PERBAIKAN KESALAHAN KETIK DI SINI ---
     var category by remember { mutableStateOf("") }
-    // ------------------------------------------
-
     var isCategoryExpanded by remember { mutableStateOf(false) }
 
     val defaultCategories = listOf(
@@ -193,6 +245,18 @@ fun AddAssetScreen(
     )
     val customCategories by viewModel.allCategories.collectAsStateWithLifecycle()
     val allCategoryOptions = (defaultCategories + customCategories).distinct().sorted()
+
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeUnitUsaha, assetToEdit, allUnitUsaha) {
+        if (isEditMode) {
+            selectedUnitUsaha = allUnitUsaha.find { it.id == assetToEdit?.unitUsahaId }
+        } else if (userRole == "pengurus") {
+            selectedUnitUsaha = activeUnitUsaha
+        }
+    }
 
     LaunchedEffect(assetToEdit) {
         if (isEditMode) {
@@ -244,6 +308,38 @@ fun AddAssetScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (userRole == "manager") {
+                    ExposedDropdownMenuBox(
+                        expanded = isUnitUsahaExpanded,
+                        onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Unit Usaha") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isUnitUsahaExpanded,
+                            onDismissRequest = { isUnitUsahaExpanded = false }
+                        ) {
+                            allUnitUsaha.forEach { unit ->
+                                DropdownMenuItem(
+                                    text = { Text(unit.name) },
+                                    onClick = {
+                                        selectedUnitUsaha = unit
+                                        isUnitUsahaExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -340,12 +436,14 @@ fun AddAssetScreen(
                         val quantityInt = quantity.toIntOrNull()
                         val priceDouble = purchasePrice.toDoubleOrNull()
                         val sellingPriceDouble = sellingPrice.toDoubleOrNull()
+                        val finalUnitUsahaId = selectedUnitUsaha?.id
 
-                        if (name.isNotBlank() && quantityInt != null && priceDouble != null && sellingPriceDouble != null) {
+                        if (name.isNotBlank() && finalUnitUsahaId != null && quantityInt != null && priceDouble != null && sellingPriceDouble != null) {
                             val finalCategory = category.trim().ifBlank { "Lain-lain" }
                             if (isEditMode) {
                                 val updatedAsset = assetToEdit!!.copy(
                                     name = name,
+                                    unitUsahaId = finalUnitUsahaId,
                                     quantity = quantityInt,
                                     purchasePrice = priceDouble,
                                     sellingPrice = sellingPriceDouble,
@@ -358,6 +456,7 @@ fun AddAssetScreen(
                             } else {
                                 val newAsset = Asset(
                                     name = name,
+                                    unitUsahaId = finalUnitUsahaId,
                                     quantity = quantityInt,
                                     purchasePrice = priceDouble,
                                     sellingPrice = sellingPriceDouble,
@@ -367,7 +466,7 @@ fun AddAssetScreen(
                                 viewModel.insert(newAsset, imageUri)
                             }
                         } else {
-                            Toast.makeText(context, "Harap isi semua kolom dengan benar", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Harap isi semua kolom dengan benar, termasuk Unit Usaha", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

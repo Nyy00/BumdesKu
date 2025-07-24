@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
 
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val authViewModelFactory = AuthViewModelFactory()
-        val assetViewModelFactory = AssetViewModelFactory(assetRepository)
+        val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
 
@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
                         asset = assetRepository,
                         account = accountRepository,
                         transaction = transactionRepository,
-                        debt = debtRepository
+                        debt = debtRepository,
+                        posRepository = posRepository
                     )
                 )
             }
@@ -99,7 +100,8 @@ data class AppRepositories(
     val asset: AssetRepository,
     val account: AccountRepository,
     val transaction: TransactionRepository,
-    val debt: DebtRepository
+    val debt: DebtRepository,
+    val posRepository: PosRepository
 )
 
 @Composable
@@ -131,6 +133,9 @@ fun BumdesApp(
             repositories.transaction.syncTransactions(targetUserId!!)
             repositories.debt.syncPayables(targetUserId!!)
             repositories.debt.syncReceivables(targetUserId!!)
+            // --- TAMBAHKAN BARIS INI ---
+            repositories.posRepository.syncSales(targetUserId!!)
+            // ---------------------------
         }
     }
 
@@ -419,12 +424,16 @@ fun BumdesApp(
         }
 
         composable("asset_list") {
+            // Kita butuh AuthViewModel untuk mendapatkan peran pengguna
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
-            val assets by assetViewModel.allAssets.collectAsStateWithLifecycle(emptyList())
+
             AssetListScreen(
-                assets = assets,
+                viewModel = assetViewModel, // Berikan ViewModel langsung
+                userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
                 onAddAssetClick = { navController.navigate("add_asset") },
-                // Arahkan ke rute edit saat item diklik
                 onItemClick = { asset ->
                     navController.navigate("edit_asset/${asset.localId}")
                 },
@@ -434,10 +443,16 @@ fun BumdesApp(
         }
 
         composable("add_asset") {
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
-            // Panggil AddAssetScreen tanpa parameter assetToEdit (mode tambah)
+
             AddAssetScreen(
                 viewModel = assetViewModel,
+                userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
+                activeUnitUsaha = activeUnitUsaha, // Berikan unit usaha yang aktif
                 onSaveComplete = { navController.popBackStack() },
                 onNavigateUp = { navController.popBackStack() }
             )
@@ -449,16 +464,20 @@ fun BumdesApp(
         ) { backStackEntry ->
             val assetId = backStackEntry.arguments?.getInt("assetId")
             if (assetId != null) {
+                val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+                val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+                val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
                 val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
-                // Ambil data aset yang akan diedit dari ViewModel
                 val assetToEdit by assetViewModel.getAssetById(assetId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
-                // Tampilkan layar hanya jika data sudah ada
                 assetToEdit?.let {
                     AddAssetScreen(
-                        assetToEdit = it, // Berikan data ke layar (mode edit)
+                        assetToEdit = it,
                         viewModel = assetViewModel,
+                        userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
+                        activeUnitUsaha = activeUnitUsaha, // Berikan unit usaha yang aktif
                         onSaveComplete = { navController.popBackStack() },
                         onNavigateUp = { navController.popBackStack() }
                     )
