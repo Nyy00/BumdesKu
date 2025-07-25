@@ -35,7 +35,8 @@ class AuthViewModel(
     private val transactionRepository: TransactionRepository,
     private val assetRepository: AssetRepository,
     private val posRepository: PosRepository,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val debtRepository: DebtRepository
 ) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
@@ -67,11 +68,11 @@ class AuthViewModel(
     private fun clearActiveListeners() {
         activeListeners.forEach { it.remove() }
         activeListeners.clear()
-        Log.d("AuthViewModel", "All active listeners have been cleared.")
+        Log.d("AuthViewModel", "All active listeners cleared.")
     }
 
     private fun triggerSyncForManagerAndAuditor() {
-        clearActiveListeners() // Selalu bersihkan listener lama terlebih dahulu
+        clearActiveListeners()
         try {
             Log.d("AuthViewModel", "Manager/Auditor sync started.")
             activeListeners.add(accountRepository.syncAccounts(auth.currentUser!!.uid))
@@ -79,6 +80,8 @@ class AuthViewModel(
             activeListeners.add(assetRepository.syncAllAssetsForManager())
             activeListeners.add(transactionRepository.syncAllTransactionsForManager())
             activeListeners.add(posRepository.syncAllSalesForManager())
+            activeListeners.add(debtRepository.syncAllPayablesForManager())
+            activeListeners.add(debtRepository.syncAllReceivablesForManager())
         } catch (e: Exception) {
             Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
         }
@@ -99,19 +102,21 @@ class AuthViewModel(
                         }
                     }
                     "pengurus" -> {
-                        clearActiveListeners() // Bersihkan listener lama
+                        clearActiveListeners()
                         activeListeners.add(accountRepository.syncAccounts(userId))
 
                         if (profile.managedUnitUsahaIds.isNotEmpty()) {
                             activeListeners.add(transactionRepository.syncTransactionsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(assetRepository.syncAssetsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(posRepository.syncSalesForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(debtRepository.syncPayablesForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(debtRepository.syncReceivablesForUser(profile.managedUnitUsahaIds))
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)
                     }
                     else -> {
-                        clearActiveListeners() // Bersihkan untuk pengguna tanpa peran
+                        clearActiveListeners()
                         activeListeners.add(accountRepository.syncAccounts(userId))
                     }
                 }

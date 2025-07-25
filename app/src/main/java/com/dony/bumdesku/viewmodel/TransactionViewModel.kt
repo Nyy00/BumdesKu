@@ -273,8 +273,11 @@ class TransactionViewModel(
             val filteredTx = transactions
                 .filter { it.debitAccountId == accountId || it.creditAccountId == accountId }
                 .sortedBy { it.date }
-            val runningBalances = mutableMapOf<Int, Double>()
+
+            // ✅ PERBAIKAN 1: Ubah tipe kunci Map dari Int menjadi String
+            val runningBalances = mutableMapOf<String, Double>()
             var currentBalance = 0.0
+
             for (tx in filteredTx) {
                 val debit = if (tx.debitAccountId == accountId) tx.amount else 0.0
                 val credit = if (tx.creditAccountId == accountId) tx.amount else 0.0
@@ -282,13 +285,16 @@ class TransactionViewModel(
                     AccountCategory.ASET, AccountCategory.BEBAN -> debit - credit
                     else -> credit - debit
                 }
-                runningBalances[tx.localId] = currentBalance
+                // ✅ PERBAIKAN 2: Gunakan tx.id sebagai kunci, bukan tx.localId
+                runningBalances[tx.id] = currentBalance
             }
             BukuPembantuData(filteredTx, runningBalances)
         }
     }
     fun onSearchQueryChange(newQuery: String) { _searchQuery.value = newQuery }
-    fun getTransactionById(id: Int): Flow<Transaction?> = transactionRepository.getTransactionById(id)
+    fun getTransactionById(id: String): Flow<Transaction?> { // <-- UBAH TIPE DATA DI SINI
+        return transactionRepository.getTransactionById(id)
+    }
     fun insert(transaction: Transaction) = viewModelScope.launch { transactionRepository.insert(transaction.copy(id = UUID.randomUUID().toString())) }
     fun update(transaction: Transaction) = viewModelScope.launch { transactionRepository.update(transaction) }
     fun delete(transaction: Transaction) = viewModelScope.launch { transactionRepository.delete(transaction) }

@@ -11,17 +11,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import com.dony.bumdesku.data.UnitUsaha
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
@@ -30,23 +27,25 @@ import com.dony.bumdesku.data.AccountCategory
 import com.dony.bumdesku.data.Payable
 import com.dony.bumdesku.data.Receivable
 import com.dony.bumdesku.viewmodel.DebtViewModel
-import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.absoluteValue
 
 // --- Layar Daftar Utang (Payable) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PayableListScreen(
-    payables: List<Payable>,
+    viewModel: DebtViewModel,
+    userRole: String,
     onAddItemClick: () -> Unit,
-    onEditItemClick: (Int) -> Unit,
+    onEditItemClick: (String) -> Unit,
     onNavigateUp: () -> Unit,
     onMarkAsPaid: (Payable) -> Unit,
     onDeleteItem: (Payable) -> Unit
 ) {
+    val payables by viewModel.filteredPayables.collectAsStateWithLifecycle()
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedUnit by viewModel.selectedUnitFilter.collectAsStateWithLifecycle()
     var itemToConfirmPaid by remember { mutableStateOf<Payable?>(null) }
     var itemToConfirmDelete by remember { mutableStateOf<Payable?>(null) }
 
@@ -54,22 +53,72 @@ fun PayableListScreen(
         topBar = { TopAppBar(title = { Text("Daftar Utang Usaha") }, navigationIcon = { IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") } }) },
         floatingActionButton = { FloatingActionButton(onClick = onAddItemClick) { Icon(Icons.Default.Add, "Tambah Utang") } }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(payables, key = { it.localId }) { payable ->
-                DebtItemCard(
-                    contactName = payable.contactName,
-                    description = payable.description,
-                    amount = payable.amount,
-                    dueDate = payable.dueDate,
-                    isPaid = payable.isPaid,
-                    onCardClick = { if (!payable.isPaid) onEditItemClick(payable.localId) },
-                    onMarkAsPaid = { itemToConfirmPaid = payable },
-                    onDeleteClick = { itemToConfirmDelete = payable }
-                )
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            // Filter Dropdown untuk Manajer/Auditor
+            if (userRole == "manager" || userRole == "auditor") {
+                var isExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = isExpanded,
+                    onExpandedChange = { isExpanded = !isExpanded },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnit?.name ?: "Semua Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Filter Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isExpanded,
+                        onDismissRequest = { isExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Semua Unit Usaha") },
+                            onClick = {
+                                viewModel.selectUnitFilter(null)
+                                isExpanded = false
+                            }
+                        )
+                        allUnitUsaha.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    viewModel.selectUnitFilter(unit)
+                                    isExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (payables.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(if (selectedUnit != null) "Tidak ada utang untuk unit ini." else "Belum ada utang.")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(payables, key = { it.id }) { payable ->
+                        DebtItemCard(
+                            contactName = payable.contactName,
+                            description = payable.description,
+                            amount = payable.amount,
+                            dueDate = payable.dueDate,
+                            isPaid = payable.isPaid,
+                            onCardClick = { if (!payable.isPaid) onEditItemClick(payable.id) },
+                            onMarkAsPaid = { itemToConfirmPaid = payable },
+                            onDeleteClick = { itemToConfirmDelete = payable }
+                        )
+                    }
+                }
             }
         }
     }
@@ -78,7 +127,7 @@ fun PayableListScreen(
         AlertDialog(
             onDismissRequest = { itemToConfirmPaid = null },
             title = { Text("Konfirmasi Pelunasan") },
-            text = { Text("Apakah Anda yakin ingin menandai utang ini sebagai LUNAS?") },
+            text = { Text("Yakin ingin menandai utang ini sebagai LUNAS?") },
             confirmButton = { Button(onClick = { onMarkAsPaid(payable); itemToConfirmPaid = null }) { Text("Ya, Lunas") } },
             dismissButton = { Button(onClick = { itemToConfirmPaid = null }) { Text("Batal") } }
         )
@@ -88,7 +137,7 @@ fun PayableListScreen(
         AlertDialog(
             onDismissRequest = { itemToConfirmDelete = null },
             title = { Text("Konfirmasi Hapus") },
-            text = { Text("Apakah Anda yakin ingin menghapus catatan ini? Aksi ini tidak bisa dibatalkan.") },
+            text = { Text("Yakin ingin menghapus catatan ini? Aksi ini tidak bisa dibatalkan.") },
             confirmButton = { Button(onClick = { onDeleteItem(payable); itemToConfirmDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Hapus") } },
             dismissButton = { Button(onClick = { itemToConfirmDelete = null }) { Text("Batal") } }
         )
@@ -99,13 +148,17 @@ fun PayableListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReceivableListScreen(
-    receivables: List<Receivable>,
+    viewModel: DebtViewModel,
+    userRole: String,
     onAddItemClick: () -> Unit,
-    onEditItemClick: (Int) -> Unit,
+    onEditItemClick: (String) -> Unit,
     onNavigateUp: () -> Unit,
     onMarkAsPaid: (Receivable) -> Unit,
     onDeleteItem: (Receivable) -> Unit
 ) {
+    val receivables by viewModel.filteredReceivables.collectAsStateWithLifecycle()
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(initialValue = emptyList())
+    val selectedUnit by viewModel.selectedUnitFilter.collectAsStateWithLifecycle()
     var itemToConfirmPaid by remember { mutableStateOf<Receivable?>(null) }
     var itemToConfirmDelete by remember { mutableStateOf<Receivable?>(null) }
 
@@ -113,22 +166,69 @@ fun ReceivableListScreen(
         topBar = { TopAppBar(title = { Text("Daftar Piutang Usaha") }, navigationIcon = { IconButton(onClick = onNavigateUp) { Icon(Icons.Default.ArrowBack, "Kembali") } }) },
         floatingActionButton = { FloatingActionButton(onClick = onAddItemClick) { Icon(Icons.Default.Add, "Tambah Piutang") } }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(receivables, key = { it.localId }) { receivable ->
-                DebtItemCard(
-                    contactName = receivable.contactName,
-                    description = receivable.description,
-                    amount = receivable.amount,
-                    dueDate = receivable.dueDate,
-                    isPaid = receivable.isPaid,
-                    onCardClick = { if (!receivable.isPaid) onEditItemClick(receivable.localId) },
-                    onMarkAsPaid = { itemToConfirmPaid = receivable },
-                    onDeleteClick = { itemToConfirmDelete = receivable }
-                )
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (userRole == "manager" || userRole == "auditor") {
+                var isExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = isExpanded,
+                    onExpandedChange = { isExpanded = !isExpanded },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnit?.name ?: "Semua Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Filter Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isExpanded,
+                        onDismissRequest = { isExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Semua Unit Usaha") },
+                            onClick = {
+                                viewModel.selectUnitFilter(null)
+                                isExpanded = false
+                            }
+                        )
+                        allUnitUsaha.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    viewModel.selectUnitFilter(unit)
+                                    isExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (receivables.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(if (selectedUnit != null) "Tidak ada piutang untuk unit ini." else "Belum ada piutang.")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(receivables, key = { it.id }) { receivable ->
+                        DebtItemCard(
+                            contactName = receivable.contactName,
+                            description = receivable.description,
+                            amount = receivable.amount,
+                            dueDate = receivable.dueDate,
+                            isPaid = receivable.isPaid,
+                            onCardClick = { if (!receivable.isPaid) onEditItemClick(receivable.id) },
+                            onMarkAsPaid = { itemToConfirmPaid = receivable },
+                            onDeleteClick = { itemToConfirmDelete = receivable }
+                        )
+                    }
+                }
             }
         }
     }
@@ -137,7 +237,7 @@ fun ReceivableListScreen(
         AlertDialog(
             onDismissRequest = { itemToConfirmPaid = null },
             title = { Text("Konfirmasi Pelunasan") },
-            text = { Text("Apakah Anda yakin ingin menandai piutang ini sebagai LUNAS?") },
+            text = { Text("Yakin ingin menandai piutang ini sebagai LUNAS?") },
             confirmButton = { Button(onClick = { onMarkAsPaid(receivable); itemToConfirmPaid = null }) { Text("Ya, Lunas") } },
             dismissButton = { Button(onClick = { itemToConfirmPaid = null }) { Text("Batal") } }
         )
@@ -147,7 +247,7 @@ fun ReceivableListScreen(
         AlertDialog(
             onDismissRequest = { itemToConfirmDelete = null },
             title = { Text("Konfirmasi Hapus") },
-            text = { Text("Apakah Anda yakin ingin menghapus catatan ini?") },
+            text = { Text("Yakin ingin menghapus catatan ini?") },
             confirmButton = { Button(onClick = { onDeleteItem(receivable); itemToConfirmDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Hapus") } },
             dismissButton = { Button(onClick = { itemToConfirmDelete = null }) { Text("Batal") } }
         )
@@ -228,12 +328,14 @@ fun DebtItemCard(
     }
 }
 
-// --- Layar Entri Utang (untuk Tambah & Edit) ---
+// --- Layar Entri Utang (PayableEntryScreen) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PayableEntryScreen(
     payableToEdit: Payable?,
     viewModel: DebtViewModel,
+    userRole: String,
+    activeUnitUsaha: UnitUsaha?,
     onSave: (Payable) -> Unit,
     onSaveWithJournal: (Payable, Account) -> Unit,
     onNavigateUp: () -> Unit
@@ -243,22 +345,32 @@ fun PayableEntryScreen(
 
     var contactName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") } // Tetap simpan sebagai String (hanya angka)
+    var amount by remember { mutableStateOf("") }
     var dueDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var showDatePicker by remember { mutableStateOf(false) }
-
     val dateState = rememberDatePickerState(initialSelectedDateMillis = payableToEdit?.dueDate ?: System.currentTimeMillis())
+
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
 
     val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle(initialValue = emptyList())
     val debitAccountOptions = allAccounts.filter { it.category == AccountCategory.ASET || it.category == AccountCategory.BEBAN }
     var selectedDebitAccount by remember { mutableStateOf<Account?>(null) }
     var isDebitAccountExpanded by remember { mutableStateOf(false) }
 
+    LaunchedEffect(activeUnitUsaha, payableToEdit, allUnitUsaha) {
+        if (payableToEdit != null && allUnitUsaha.isNotEmpty()) {
+            selectedUnitUsaha = allUnitUsaha.find { it.id == payableToEdit.unitUsahaId }
+        } else if (userRole == "pengurus") {
+            selectedUnitUsaha = activeUnitUsaha
+        }
+    }
+
     LaunchedEffect(payableToEdit) {
         if (isEditMode) {
             contactName = payableToEdit?.contactName ?: ""
             description = payableToEdit?.description ?: ""
-            // ✅ PERBAIKAN 1: HINDARI NOTASI ILMIAH
             amount = payableToEdit?.amount?.toLong()?.toString() ?: ""
             dueDateMillis = payableToEdit?.dueDate ?: System.currentTimeMillis()
         }
@@ -275,16 +387,43 @@ fun PayableEntryScreen(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Dropdown Unit Usaha (hanya untuk manajer)
+            if (userRole == "manager") {
+                ExposedDropdownMenuBox(
+                    expanded = isUnitUsahaExpanded,
+                    onExpandedChange = { if (!isEditMode) isUnitUsahaExpanded = !isUnitUsahaExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isUnitUsahaExpanded,
+                        onDismissRequest = { isUnitUsahaExpanded = false }
+                    ) {
+                        allUnitUsaha.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    selectedUnitUsaha = unit
+                                    isUnitUsahaExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(value = contactName, onValueChange = { contactName = it }, label = { Text("Nama Kreditor") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Utang") }, modifier = Modifier.fillMaxWidth())
 
-            // ✅ PERBAIKAN 2: TERAPKAN FORMATTER PADA INPUT JUMLAH
             OutlinedTextField(
                 value = amount,
-                onValueChange = { newValue ->
-                    // Hanya izinkan angka yang dimasukkan
-                    amount = newValue.filter { it.isDigit() }
-                },
+                onValueChange = { newValue -> amount = newValue.filter { it.isDigit() } },
                 label = { Text("Jumlah Utang") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 visualTransformation = ThousandSeparatorVisualTransformation(),
@@ -313,18 +452,27 @@ fun PayableEntryScreen(
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
-                    if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null) {
+                    val finalUnitUsahaId = selectedUnitUsaha?.id
+                    if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null && finalUnitUsahaId != null) {
                         if (isEditMode) {
                             val updatedPayable = payableToEdit!!.copy(
-                                contactName = contactName, description = description, amount = amountDouble, dueDate = dueDateMillis
+                                contactName = contactName,
+                                description = description,
+                                amount = amountDouble,
+                                dueDate = dueDateMillis,
+                                unitUsahaId = finalUnitUsahaId // Pastikan unitUsahaId juga diupdate
                             )
                             onSave(updatedPayable)
                         } else {
                             if (selectedDebitAccount != null) {
                                 onSaveWithJournal(
                                     Payable(
-                                        contactName = contactName, description = description, amount = amountDouble,
-                                        transactionDate = System.currentTimeMillis(), dueDate = dueDateMillis
+                                        contactName = contactName,
+                                        description = description,
+                                        amount = amountDouble,
+                                        transactionDate = System.currentTimeMillis(),
+                                        dueDate = dueDateMillis,
+                                        unitUsahaId = finalUnitUsahaId
                                     ),
                                     selectedDebitAccount!!
                                 )
@@ -333,7 +481,7 @@ fun PayableEntryScreen(
                             }
                         }
                     } else {
-                        Toast.makeText(context, "Harap isi semua kolom", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Harap isi semua kolom, termasuk Unit Usaha.", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -351,6 +499,8 @@ fun PayableEntryScreen(
 fun ReceivableEntryScreen(
     receivableToEdit: Receivable?,
     viewModel: DebtViewModel,
+    userRole: String, // ✅ Tambahkan parameter ini
+    activeUnitUsaha: UnitUsaha?, // ✅ Tambahkan parameter ini
     onSave: (Receivable) -> Unit,
     onSaveWithJournal: (Receivable, Account) -> Unit,
     onNavigateUp: () -> Unit
@@ -366,10 +516,25 @@ fun ReceivableEntryScreen(
 
     val dateState = rememberDatePickerState(initialSelectedDateMillis = receivableToEdit?.dueDate ?: System.currentTimeMillis())
 
+    // State untuk dropdown unit usaha
+    val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(emptyList())
+    var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
+    var isUnitUsahaExpanded by remember { mutableStateOf(false) }
+
+    // State untuk dropdown akun kredit
     val allAccounts by viewModel.allAccounts.collectAsStateWithLifecycle(initialValue = emptyList())
     val creditAccountOptions = allAccounts.filter { it.category == AccountCategory.PENDAPATAN }
     var selectedCreditAccount by remember { mutableStateOf<Account?>(null) }
     var isCreditAccountExpanded by remember { mutableStateOf(false) }
+
+    // Efek untuk mengatur state awal saat layar dibuka
+    LaunchedEffect(activeUnitUsaha, receivableToEdit, allUnitUsaha) {
+        if (receivableToEdit != null && allUnitUsaha.isNotEmpty()) {
+            selectedUnitUsaha = allUnitUsaha.find { it.id == receivableToEdit.unitUsahaId }
+        } else if (userRole == "pengurus") {
+            selectedUnitUsaha = activeUnitUsaha
+        }
+    }
 
     LaunchedEffect(receivableToEdit) {
         if (isEditMode) {
@@ -391,20 +556,50 @@ fun ReceivableEntryScreen(
             modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Dropdown Unit Usaha (hanya untuk manajer)
+            if (userRole == "manager") {
+                ExposedDropdownMenuBox(
+                    expanded = isUnitUsahaExpanded,
+                    onExpandedChange = { if (!isEditMode) isUnitUsahaExpanded = !isUnitUsahaExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedUnitUsaha?.name ?: "Pilih Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isUnitUsahaExpanded,
+                        onDismissRequest = { isUnitUsahaExpanded = false }
+                    ) {
+                        allUnitUsaha.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    selectedUnitUsaha = unit
+                                    isUnitUsahaExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
             OutlinedTextField(value = contactName, onValueChange = { contactName = it }, label = { Text("Nama Debitor") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = description, onValueChange = { description = it }, label = { Text("Deskripsi Piutang") }, modifier = Modifier.fillMaxWidth())
 
             OutlinedTextField(
                 value = amount,
-                onValueChange = { newValue ->
-                    amount = newValue.filter { it.isDigit() }
-                },
+                onValueChange = { newValue -> amount = newValue.filter { it.isDigit() } },
                 label = { Text("Jumlah Piutang") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 visualTransformation = ThousandSeparatorVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Dropdown Akun Kredit (hanya saat menambah baru)
             if (!isEditMode) {
                 ExposedDropdownMenuBox(expanded = isCreditAccountExpanded, onExpandedChange = { isCreditAccountExpanded = !isCreditAccountExpanded }) {
                     OutlinedTextField(
@@ -427,18 +622,27 @@ fun ReceivableEntryScreen(
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
-                    if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null) {
+                    val finalUnitUsahaId = selectedUnitUsaha?.id
+                    if (contactName.isNotBlank() && description.isNotBlank() && amountDouble != null && finalUnitUsahaId != null) {
                         if (isEditMode) {
                             val updatedReceivable = receivableToEdit!!.copy(
-                                contactName = contactName, description = description, amount = amountDouble, dueDate = dueDateMillis
+                                contactName = contactName,
+                                description = description,
+                                amount = amountDouble,
+                                dueDate = dueDateMillis,
+                                unitUsahaId = finalUnitUsahaId // Pastikan unitUsahaId diupdate
                             )
                             onSave(updatedReceivable)
                         } else {
                             if (selectedCreditAccount != null) {
                                 onSaveWithJournal(
                                     Receivable(
-                                        contactName = contactName, description = description, amount = amountDouble,
-                                        transactionDate = System.currentTimeMillis(), dueDate = dueDateMillis
+                                        contactName = contactName,
+                                        description = description,
+                                        amount = amountDouble,
+                                        transactionDate = System.currentTimeMillis(),
+                                        dueDate = dueDateMillis,
+                                        unitUsahaId = finalUnitUsahaId
                                     ),
                                     selectedCreditAccount!!
                                 )
@@ -447,7 +651,7 @@ fun ReceivableEntryScreen(
                             }
                         }
                     } else {
-                        Toast.makeText(context, "Harap isi semua kolom", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Harap isi semua kolom, termasuk Unit Usaha.", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

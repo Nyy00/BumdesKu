@@ -3,7 +3,6 @@ package com.dony.bumdesku.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// Enum untuk kategori utama akun
 enum class AccountCategory {
     ASET,
     KEWAJIBAN,
@@ -14,15 +13,16 @@ enum class AccountCategory {
 
 @Entity(tableName = "accounts")
 data class Account(
-    @PrimaryKey(autoGenerate = true)
-    val localId: Int = 0,
+    @PrimaryKey // ✅ UBAH: Jadikan 'id' sebagai Primary Key
+    var id: String = "",
 
-    var id: String = "",          // ID untuk Firestore
-    var userId: String = "",      // ID pengguna yang membuat
-    val accountNumber: String = "", // Nomor Akun, cth: "111" untuk Kas
-    val accountName: String = "",   // Nama Akun, cth: "Kas Tunai"
-    val category: AccountCategory   // Kategori utama dari enum di atas
+    // localId tidak lagi dibutuhkan
+    var userId: String = "",
+    val accountNumber: String = "",
+    val accountName: String = "",
+
+    val category: AccountCategory
 ) {
-    // Constructor kosong wajib untuk Firestore
-    constructor() : this(0, "", "", "", "", AccountCategory.ASET)
+    // Konstruktor kosong tetap diperlukan untuk Firestore
+    constructor() : this("", "", "", "", AccountCategory.ASET)
 }

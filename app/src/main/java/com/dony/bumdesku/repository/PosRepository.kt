@@ -56,9 +56,11 @@ class PosRepository(
                     return@addSnapshotListener
                 }
                 scope.launch(Dispatchers.IO) {
+                    // ✅ PERBAIKAN: Pastikan 'id' dari dokumen diisi ke objek Sale
                     val sales = snapshots?.documents?.mapNotNull { doc ->
-                        doc.toObject(Sale::class.java)
+                        doc.toObject(Sale::class.java)?.apply { id = doc.id }
                     } ?: emptyList()
+
                     saleDao.deleteAll()
                     saleDao.insertAll(sales)
                 }
@@ -73,8 +75,9 @@ class PosRepository(
                     return@addSnapshotListener
                 }
                 scope.launch(Dispatchers.IO) {
+                    // ✅ PERBAIKAN: Pastikan 'id' dari dokumen diisi ke objek Sale
                     val sales = snapshots?.documents?.mapNotNull { doc ->
-                        doc.toObject(Sale::class.java)
+                        doc.toObject(Sale::class.java)?.apply { id = doc.id }
                     } ?: emptyList()
                     saleDao.deleteAll()
                     saleDao.insertAll(sales)

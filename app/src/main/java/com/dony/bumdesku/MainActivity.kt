@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
-        val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository)
+        val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository, unitUsahaRepository)
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
         val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
@@ -69,7 +69,8 @@ class MainActivity : ComponentActivity() {
             transactionRepository,
             assetRepository,
             posRepository,
-            accountRepository
+            accountRepository,
+            debtRepository
         )
 
         setContent {
@@ -327,12 +328,16 @@ fun BumdesApp(
                 dashboardData = dashboardData,
                 chartData = chartData,
                 userRole = userProfile?.role ?: "pengurus",
-                searchQuery = searchQuery, // <-- Kirim query
-                onSearchQueryChange = transactionViewModel::onSearchQueryChange, // <-- Kirim aksi
+                searchQuery = searchQuery,
+                onSearchQueryChange = transactionViewModel::onSearchQueryChange,
                 onAddItemClick = { navController.navigate("add_transaction") },
+
+                // ✅ PERBAIKAN DI SINI:
+                // Ubah transaction.localId menjadi transaction.id
                 onItemClick = { transaction ->
-                    navController.navigate("edit_transaction/${transaction.localId}")
+                    navController.navigate("edit_transaction/${transaction.id}")
                 },
+
                 onDeleteClick = { transaction -> transactionViewModel.delete(transaction) },
                 onNavigateUp = { navController.popBackStack() },
                 onNavigateToUnitUsaha = { navController.navigate("unit_usaha_management") },
@@ -356,12 +361,15 @@ fun BumdesApp(
 
         composable(
             "edit_transaction/{transactionId}",
-            arguments = listOf(navArgument("transactionId") { type = NavType.IntType })
+            // ✅ UBAH 1: Tipe argumen menjadi StringType
+            arguments = listOf(navArgument("transactionId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val transactionId = backStackEntry.arguments?.getInt("transactionId")
-            val localContext = LocalContext.current // Ambil context untuk Toast
+            // ✅ UBAH 2: Ambil argumen sebagai String
+            val transactionId = backStackEntry.arguments?.getString("transactionId")
+            val localContext = LocalContext.current
 
             if (transactionId != null) {
+                // ✅ UBAH 3: Panggil fungsi ViewModel dengan ID yang sudah String
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
@@ -539,26 +547,34 @@ fun BumdesApp(
         }
 
         composable("payable_list") {
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            val payables by viewModel.allPayables.collectAsState(initial = emptyList())
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             PayableListScreen(
-                payables = payables,
+                viewModel = debtViewModel,
+                userRole = userProfile?.role ?: "pengurus",
                 onAddItemClick = { navController.navigate("add_payable") },
                 onEditItemClick = { payableId -> navController.navigate("edit_payable/$payableId") },
                 onNavigateUp = { navController.popBackStack() },
-                onMarkAsPaid = { payable -> viewModel.markPayableAsPaid(payable) },
-                onDeleteItem = { payable -> viewModel.delete(payable) }
+                onMarkAsPaid = { payable -> debtViewModel.markPayableAsPaid(payable) },
+                onDeleteItem = { payable -> debtViewModel.delete(payable) }
             )
         }
 
         composable("add_payable") {
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
             PayableEntryScreen(
                 payableToEdit = null,
-                viewModel = viewModel,
-                onSave = { /* Not used in add mode */ },
+                viewModel = debtViewModel,
+                userRole = userProfile?.role ?: "pengurus",
+                activeUnitUsaha = activeUnitUsaha,
+                onSave = { updatedPayable ->
+                    debtViewModel.update(updatedPayable)
+                    navController.popBackStack()
+                },
                 onSaveWithJournal = { payable, account ->
-                    viewModel.insertPayableWithJournal(payable, account)
+                    debtViewModel.insertPayableWithJournal(payable, account)
                     navController.popBackStack()
                 },
                 onNavigateUp = { navController.popBackStack() }
@@ -567,22 +583,25 @@ fun BumdesApp(
 
         composable(
             "edit_payable/{payableId}",
-            arguments = listOf(navArgument("payableId") { type = NavType.IntType })
+            arguments = listOf(navArgument("payableId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            val payableId = backStackEntry.arguments?.getInt("payableId")
-            val payableToEdit by viewModel.getPayableById(payableId ?: -1)
-                .collectAsState(initial = null)
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+            val payableId = backStackEntry.arguments?.getString("payableId")
+            val payableToEdit by debtViewModel.getPayableById(payableId ?: "").collectAsState(initial = null)
 
             if (payableToEdit != null) {
                 PayableEntryScreen(
                     payableToEdit = payableToEdit,
-                    viewModel = viewModel,
+                    viewModel = debtViewModel,
+                    userRole = userProfile?.role ?: "pengurus",
+                    activeUnitUsaha = activeUnitUsaha,
                     onSave = { updatedPayable ->
-                        viewModel.update(updatedPayable)
+                        debtViewModel.update(updatedPayable)
                         navController.popBackStack()
                     },
-                    onSaveWithJournal = { _, _ -> /* Not used in edit mode */ },
+                    onSaveWithJournal = { _, _ -> /* Tidak digunakan saat edit */ },
                     onNavigateUp = { navController.popBackStack() }
                 )
             }
@@ -603,26 +622,35 @@ fun BumdesApp(
         }
 
         composable("receivable_list") {
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            val receivables by viewModel.allReceivables.collectAsState(initial = emptyList())
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            // Menggunakan viewModel langsung untuk mengakses semua state yang diperlukan
             ReceivableListScreen(
-                receivables = receivables,
+                viewModel = debtViewModel,
+                userRole = userProfile?.role ?: "pengurus",
                 onAddItemClick = { navController.navigate("add_receivable") },
                 onEditItemClick = { receivableId -> navController.navigate("edit_receivable/$receivableId") },
                 onNavigateUp = { navController.popBackStack() },
-                onMarkAsPaid = { receivable -> viewModel.markReceivableAsPaid(receivable) },
-                onDeleteItem = { receivable -> viewModel.delete(receivable) }
+                onMarkAsPaid = { receivable -> debtViewModel.markReceivableAsPaid(receivable) },
+                onDeleteItem = { receivable -> debtViewModel.delete(receivable) }
             )
         }
 
         composable("add_receivable") {
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
             ReceivableEntryScreen(
                 receivableToEdit = null, // Mode Tambah
-                viewModel = viewModel,
-                onSave = { /* Not used in add mode */ },
+                viewModel = debtViewModel,
+                userRole = userProfile?.role ?: "pengurus",
+                activeUnitUsaha = activeUnitUsaha,
+                onSave = { updatedReceivable ->
+                    debtViewModel.update(updatedReceivable)
+                    navController.popBackStack()
+                },
                 onSaveWithJournal = { receivable, account ->
-                    viewModel.insertReceivableWithJournal(receivable, account)
+                    debtViewModel.insertReceivableWithJournal(receivable, account)
                     navController.popBackStack()
                 },
                 onNavigateUp = { navController.popBackStack() }
@@ -631,22 +659,27 @@ fun BumdesApp(
 
         composable(
             "edit_receivable/{receivableId}",
-            arguments = listOf(navArgument("receivableId") { type = NavType.IntType })
+            // Pastikan argumen adalah String
+            arguments = listOf(navArgument("receivableId") { type = NavType.StringType })
         ) { backStackEntry ->
-            val viewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
-            val receivableId = backStackEntry.arguments?.getInt("receivableId")
-            val receivableToEdit by viewModel.getReceivableById(receivableId ?: -1)
-                .collectAsState(initial = null)
+            val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+            // Ambil argumen sebagai String
+            val receivableId = backStackEntry.arguments?.getString("receivableId")
+            val receivableToEdit by debtViewModel.getReceivableById(receivableId ?: "").collectAsState(initial = null)
 
             if (receivableToEdit != null) {
                 ReceivableEntryScreen(
                     receivableToEdit = receivableToEdit, // Mode Edit
-                    viewModel = viewModel,
+                    viewModel = debtViewModel,
+                    userRole = userProfile?.role ?: "pengurus",
+                    activeUnitUsaha = activeUnitUsaha,
                     onSave = { updatedReceivable ->
-                        viewModel.update(updatedReceivable)
+                        debtViewModel.update(updatedReceivable)
                         navController.popBackStack()
                     },
-                    onSaveWithJournal = { _, _ -> /* Not used in edit mode */ },
+                    onSaveWithJournal = { _, _ -> /* Tidak digunakan saat edit */ },
                     onNavigateUp = { navController.popBackStack() }
                 )
             }

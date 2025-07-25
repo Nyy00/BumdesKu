@@ -53,10 +53,10 @@ fun AccountListScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(accounts, key = { it.localId }) { account ->
+                items(accounts, key = { it.id }) { account ->
                     AccountItem(
                         account = account,
-                        onItemClick = { onAccountClick(account) }, // ✅ Kirimkan aksi klik
+                        onItemClick = { onAccountClick(account) },
                         onDeleteClick = { onDeleteAccount(account) }
                     )
                 }

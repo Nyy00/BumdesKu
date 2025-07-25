@@ -5,8 +5,8 @@ import com.dony.bumdesku.data.DebtDao
 import com.dony.bumdesku.data.Payable
 import com.dony.bumdesku.data.Receivable
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,121 +14,111 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-/**
- * Repositori untuk mengelola data utang (Payable) dan piutang (Receivable).
- * Arsitektur ini menggunakan pendekatan "Local First":
- * 1. Setiap aksi (insert, update, delete) akan langsung dieksekusi di database lokal (Room)
- * untuk memastikan UI merespons secara instan.
- * 2. Setelah itu, aksi yang sama dikirim ke Firestore untuk sinkronisasi.
- * 3. Listener sinkronisasi dari Firestore bertugas untuk memperbarui data lokal
- * jika ada perubahan dari sumber lain (misal: perangkat lain atau konsol Firebase).
- */
 class DebtRepository(private val debtDao: DebtDao) {
 
     private val firestore = Firebase.firestore
     private val auth = Firebase.auth
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    // Sumber data utama untuk UI, selalu dari database lokal.
     val allPayables: Flow<List<Payable>> = debtDao.getAllPayables()
     val allReceivables: Flow<List<Receivable>> = debtDao.getAllReceivables()
-    fun getPayableById(id: Int): Flow<Payable?> = debtDao.getPayableById(id)
-    fun getReceivableById(id: Int): Flow<Receivable?> = debtDao.getReceivableById(id)
+    fun getPayableById(id: String): Flow<Payable?> = debtDao.getPayableById(id)
+    fun getReceivableById(id: String): Flow<Receivable?> = debtDao.getReceivableById(id)
 
-    // --- SINKRONISASI DATA DARI SERVER KE LOKAL ---
-
-    fun syncPayables(targetUserId: String) {
-        firestore.collection("payables").whereEqualTo("userId", targetUserId)
+    // --- FUNGSI SINKRONISASI BARU ---
+    fun syncPayablesForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("payables").whereIn("unitUsahaId", managedUnitIds.take(30))
             .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.w("DebtRepository", "Payable listen failed.", e)
-                    return@addSnapshotListener
-                }
-                scope.launch {
-                    val firestorePayables = snapshots?.mapNotNull { doc ->
-                        doc.toObject<Payable>().apply { id = doc.id }
-                    } ?: emptyList()
-                    // Timpa data lokal dengan data terbaru dari server.
-                    // Ini aman karena aksi lokal sudah dieksekusi terlebih dahulu.
-                    debtDao.deleteAllPayables()
-                    debtDao.insertAllPayables(firestorePayables)
-                }
+                handleFirestoreUpdate(e, snapshots, debtDao::deleteAllPayables, debtDao::insertAllPayables, Payable::class.java)
             }
     }
 
-    fun syncReceivables(targetUserId: String) {
-        firestore.collection("receivables").whereEqualTo("userId", targetUserId)
+    fun syncReceivablesForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("receivables").whereIn("unitUsahaId", managedUnitIds.take(30))
             .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.w("DebtRepository", "Receivable listen failed.", e)
-                    return@addSnapshotListener
-                }
-                scope.launch {
-                    val firestoreReceivables = snapshots?.mapNotNull { doc ->
-                        doc.toObject<Receivable>().apply { id = doc.id }
-                    } ?: emptyList()
-                    debtDao.deleteAllReceivables()
-                    debtDao.insertAllReceivables(firestoreReceivables)
-                }
+                handleFirestoreUpdate(e, snapshots, debtDao::deleteAllReceivables, debtDao::insertAllReceivables, Receivable::class.java)
             }
     }
 
-    // --- OPERASI CRUD (Create, Read, Update, Delete) ---
+    fun syncAllPayablesForManager(): ListenerRegistration {
+        return firestore.collection("payables")
+            .addSnapshotListener { snapshots, e ->
+                handleFirestoreUpdate(e, snapshots, debtDao::deleteAllPayables, debtDao::insertAllPayables, Payable::class.java)
+            }
+    }
 
-    // Utang (Payable)
+    fun syncAllReceivablesForManager(): ListenerRegistration {
+        return firestore.collection("receivables")
+            .addSnapshotListener { snapshots, e ->
+                handleFirestoreUpdate(e, snapshots, debtDao::deleteAllReceivables, debtDao::insertAllReceivables, Receivable::class.java)
+            }
+    }
+
+    /**
+     * ✅ FUNGSI BANTUAN YANG DIPERBAIKI
+     * Fungsi ini sekarang menerima 'clazz' untuk mengetahui tipe data apa
+     * yang harus dibuat (Payable atau Receivable).
+     */
+    private inline fun <T : Any> handleFirestoreUpdate(
+        e: Exception?,
+        snapshots: com.google.firebase.firestore.QuerySnapshot?,
+        crossinline deleteAll: suspend () -> Unit,
+        crossinline insertAll: suspend (List<T>) -> Unit,
+        clazz: Class<T>
+    ) {
+        if (e != null) {
+            Log.w("DebtRepository", "Listen failed.", e)
+            return
+        }
+        scope.launch {
+            val firestoreData = snapshots?.mapNotNull { doc ->
+                val obj = doc.toObject(clazz)
+                // Set ID secara manual setelah objek dibuat
+                when (obj) {
+                    is Payable -> obj.id = doc.id
+                    is Receivable -> obj.id = doc.id
+                }
+                obj
+            } ?: emptyList()
+            deleteAll()
+            insertAll(firestoreData)
+        }
+    }
+
+
+    // --- OPERASI CRUD (Tidak ada perubahan di sini) ---
     suspend fun insert(payable: Payable) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
-        val docId = firestore.collection("payables").document().id // Buat ID unik di awal
-        val newPayable = payable.copy(id = docId, userId = userId)
-
-        // 1. Lakukan aksi di database lokal terlebih dahulu.
-        debtDao.insertPayable(newPayable)
-        // 2. Kirim aksi ke Firestore.
-        firestore.collection("payables").document(newPayable.id).set(newPayable).await()
+        val docRef = firestore.collection("payables").document()
+        val newPayable = payable.copy(id = docRef.id, userId = userId)
+        docRef.set(newPayable).await()
     }
 
     suspend fun update(payable: Payable) {
         if (payable.id.isBlank()) return
-        // 1. Lakukan aksi di database lokal terlebih dahulu.
-        debtDao.updatePayable(payable)
-        // 2. Kirim aksi ke Firestore.
         firestore.collection("payables").document(payable.id).set(payable).await()
     }
 
     suspend fun delete(payable: Payable) {
         if (payable.id.isNotBlank()) {
-            // 1. Lakukan aksi di database lokal terlebih dahulu.
-            debtDao.deletePayable(payable)
-            // 2. Kirim aksi ke Firestore.
             firestore.collection("payables").document(payable.id).delete().await()
         }
     }
 
-    // Piutang (Receivable)
     suspend fun insert(receivable: Receivable) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
-        val docId = firestore.collection("receivables").document().id
-        val newReceivable = receivable.copy(id = docId, userId = userId)
-
-        // 1. Lakukan aksi di database lokal terlebih dahulu.
-        debtDao.insertReceivable(newReceivable)
-        // 2. Kirim aksi ke Firestore.
-        firestore.collection("receivables").document(newReceivable.id).set(newReceivable).await()
+        val docRef = firestore.collection("receivables").document()
+        val newReceivable = receivable.copy(id = docRef.id, userId = userId)
+        docRef.set(newReceivable).await()
     }
 
     suspend fun update(receivable: Receivable) {
         if (receivable.id.isBlank()) return
-        // 1. Lakukan aksi di database lokal terlebih dahulu.
-        debtDao.updateReceivable(receivable)
-        // 2. Kirim aksi ke Firestore.
         firestore.collection("receivables").document(receivable.id).set(receivable).await()
     }
 
     suspend fun delete(receivable: Receivable) {
         if (receivable.id.isNotBlank()) {
-            // 1. Lakukan aksi di database lokal terlebih dahulu.
-            debtDao.deleteReceivable(receivable)
-            // 2. Kirim aksi ke Firestore.
             firestore.collection("receivables").document(receivable.id).delete().await()
         }
     }

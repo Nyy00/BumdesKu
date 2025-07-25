@@ -25,7 +25,7 @@ import java.util.*
 fun BukuPembantuScreen(
     account: Account?,
     transactions: List<Transaction>,
-    runningBalances: Map<Int, Double>,
+    runningBalances: Map<String, Double>, // ✅ Pastikan tipe data di sini juga String
     onNavigateUp: () -> Unit
 ) {
     Scaffold(
@@ -71,12 +71,14 @@ fun BukuPembantuScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp) // Beri jarak antar Card
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(transactions, key = { it.localId }) { trx ->
-                    BukuPembantuItemCard( // Ganti ke Composable yang baru
+                // ✅ PERBAIKAN: Gunakan trx.id sebagai kunci LazyColumn
+                items(transactions, key = { it.id }) { trx ->
+                    BukuPembantuItemCard(
                         transaction = trx,
-                        saldo = runningBalances[trx.localId] ?: 0.0,
+                        // ✅ PERBAIKAN: Ambil saldo menggunakan trx.id
+                        saldo = runningBalances[trx.id] ?: 0.0,
                         selectedAccountId = account?.id ?: ""
                     )
                 }

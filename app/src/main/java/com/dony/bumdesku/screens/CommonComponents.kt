@@ -96,26 +96,16 @@ fun TransactionItem(
     val formattedAmount = currencyFormat.format(transaction.amount)
     val formattedDate = dateFormat.format(Date(transaction.date))
 
-    // Tentukan apakah item bisa diklik berdasarkan peran dan status kunci
-    val isClickable = userRole == "pengurus" && !transaction.isLocked
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(
-                enabled = isClickable,
-                onClick = onItemClick
-            ), // Gunakan variabel isClickable
+            .clickable(enabled = !transaction.isLocked) {
+                if (userRole == "pengurus") onItemClick()
+            },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(
-                start = 16.dp,
-                top = 16.dp,
-                bottom = 16.dp,
-                end = 8.dp
-            )
-        ) {
+        Column(modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)) {
+            // Baris untuk Deskripsi, Tanggal, dan Tombol Hapus
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -132,19 +122,53 @@ fun TransactionItem(
                         color = Color.Gray
                     )
                 }
+                // Tampilkan tombol hapus hanya jika pengguna adalah pengurus
                 if (userRole == "pengurus") {
                     IconButton(
                         onClick = onDeleteClick,
-                        enabled = !transaction.isLocked // Nonaktifkan tombol jika terkunci
+                        enabled = !transaction.isLocked
                     ) {
                         Icon(
                             Icons.Default.Delete,
                             "Hapus Transaksi",
-                            // Ubah warna ikon menjadi abu-abu jika terkunci
                             tint = if (transaction.isLocked) Color.LightGray else Color.Gray
                         )
                     }
                 }
+            }
+
+            // ✅ KODE YANG DITAMBAHKAN UNTUK MENAMPILKAN NOMINAL
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Baris untuk Akun Debit
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = transaction.debitAccountName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = formattedAmount,
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            // Baris untuk Akun Kredit
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = transaction.creditAccountName,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 24.dp), // Diberi padding agar menjorok ke dalam
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = formattedAmount,
+                    modifier = Modifier.padding(start = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.Gray
+                )
             }
         }
     }

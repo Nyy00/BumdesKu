@@ -3,9 +3,8 @@ package com.dony.bumdesku.repository
 import android.util.Log
 import com.dony.bumdesku.data.Transaction
 import com.dony.bumdesku.data.TransactionDao
-import com.dony.bumdesku.data.UserProfile
 import com.google.firebase.auth.ktx.auth
-import com.google.firebase.firestore.ListenerRegistration // PASTIKAN IMPORT INI ADA
+import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.ktx.Firebase
@@ -14,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 class TransactionRepository(
     private val transactionDao: TransactionDao
@@ -24,28 +24,14 @@ class TransactionRepository(
 
     val allTransactions: Flow<List<Transaction>> = transactionDao.getAllTransactions()
 
-    fun syncTransactionsForUnit(unitId: String): ListenerRegistration {
-        return firestore.collection("transactions").whereEqualTo("unitUsahaId", unitId)
-            .addSnapshotListener { snapshots, e ->
-                if (e != null) {
-                    Log.w("TransactionRepository", "Listen for unit transactions failed.", e)
-                    return@addSnapshotListener
-                }
-                scope.launch {
-                    val firestoreTransactions = snapshots?.documents?.mapNotNull { doc ->
-                        doc.toObject<Transaction>()?.apply { id = doc.id }
-                    } ?: emptyList()
-                    transactionDao.insertAll(firestoreTransactions)
-                }
-            }
-    }
-
     suspend fun clearLocalTransactions() {
         transactionDao.deleteAll()
     }
 
     /**
-     * ✅ FUNGSI BARU UNTUK PENGGUNA (PENGURUS)
+     * ✅ PERBAIKAN UTAMA DI SINI
+     * Tambahkan 'transactionDao.deleteAll()' untuk memastikan data lama
+     * dibersihkan sebelum data baru dari server dimasukkan.
      */
     fun syncTransactionsForUser(managedUnitIds: List<String>): ListenerRegistration {
         return firestore.collection("transactions").whereIn("unitUsahaId", managedUnitIds.take(30))
@@ -59,7 +45,9 @@ class TransactionRepository(
                         doc.toObject<Transaction>()?.apply { id = doc.id }
                     } ?: emptyList()
 
+                    // Hapus semua data transaksi lama di lokal
                     transactionDao.deleteAll()
+                    // Masukkan daftar transaksi yang baru dan bersih dari server
                     transactionDao.insertAll(firestoreTransactions)
                 }
             }
@@ -82,7 +70,23 @@ class TransactionRepository(
             }
     }
 
-    // FUNGSI syncTransactions(targetUserId: String) YANG LAMA SEKARANG DIHAPUS
+    // ... sisa kode lainnya di file ini tidak perlu diubah ...
+
+    fun syncTransactionsForUnit(unitId: String): ListenerRegistration {
+        return firestore.collection("transactions").whereEqualTo("unitUsahaId", unitId)
+            .addSnapshotListener { snapshots, e ->
+                if (e != null) {
+                    Log.w("TransactionRepository", "Listen for unit transactions failed.", e)
+                    return@addSnapshotListener
+                }
+                scope.launch {
+                    val firestoreTransactions = snapshots?.documents?.mapNotNull { doc ->
+                        doc.toObject<Transaction>()?.apply { id = doc.id }
+                    } ?: emptyList()
+                    transactionDao.insertAll(firestoreTransactions)
+                }
+            }
+    }
 
     suspend fun insert(transaction: Transaction) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
@@ -102,7 +106,7 @@ class TransactionRepository(
         }
     }
 
-    fun getTransactionById(id: Int): Flow<Transaction?> {
+    fun getTransactionById(id: String): Flow<Transaction?> {
         return transactionDao.getTransactionById(id)
     }
 

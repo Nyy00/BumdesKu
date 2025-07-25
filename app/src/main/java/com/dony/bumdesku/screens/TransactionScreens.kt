@@ -156,7 +156,7 @@ fun TransactionListScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(transactions, key = { it.localId }) { transaction ->
+                    items(transactions, key = { it.id }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
                             userRole = userRole,
@@ -266,10 +266,10 @@ fun AddTransactionScreen(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull()
                     if (description.isNotBlank() && amountDouble != null && debitAccount != null && creditAccount != null) {
+                        // ✅ PERBAIKAN DI SINI: Hapus 'localId' dari konstruktor
                         onSave(
                             Transaction(
-                                localId = transactionToEdit?.localId ?: 0,
-                                id = transactionToEdit?.id ?: "",
+                                id = transactionToEdit?.id ?: "", // 'id' sudah ada, tidak perlu 'localId'
                                 description = description,
                                 amount = amountDouble,
                                 date = transactionToEdit?.date ?: System.currentTimeMillis(),
