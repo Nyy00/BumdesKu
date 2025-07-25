@@ -20,7 +20,7 @@ import java.util.UUID
         Receivable::class,
         Sale::class // <-- 1. Tambahkan kelas Sale di sini
     ],
-    version = 14, // <-- 2. NAIKKAN VERSI DATABASE
+    version = 16, // <-- 2. NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {

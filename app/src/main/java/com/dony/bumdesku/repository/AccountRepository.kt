@@ -29,7 +29,6 @@ class AccountRepository(private val accountDao: AccountDao) {
      * karena Chart of Accounts bersifat global dan sama untuk semua pengguna.
      */
     fun syncAccounts(targetUserId: String): ListenerRegistration {
-        // Parameter targetUserId diabaikan karena COA bersifat global
         return firestore.collection("accounts")
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
@@ -42,7 +41,7 @@ class AccountRepository(private val accountDao: AccountDao) {
                         doc.toObject<Account>()?.apply { id = doc.id }
                     } ?: emptyList()
 
-                    // Hapus semua akun lokal dan ganti dengan daftar terbaru dari server.
+                    // Hapus semua akun lama dan masukkan daftar baru yang bersih
                     accountDao.deleteAll()
                     accountDao.insertAll(firestoreAccounts)
                     Log.d("AccountRepository", "Sinkronisasi COA berhasil, ${firestoreAccounts.size} akun diterima.")
