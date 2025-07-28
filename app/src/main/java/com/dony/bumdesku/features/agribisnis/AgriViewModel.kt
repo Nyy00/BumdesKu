@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.Harvest
 import com.dony.bumdesku.repository.AgriRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
+import com.dony.bumdesku.data.ProduceSale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
@@ -14,6 +15,8 @@ class AgriViewModel(
 ) : ViewModel() {
 
     val allHarvests: Flow<List<Harvest>> = agriRepository.allHarvests
+
+    val allProduceSales: Flow<List<ProduceSale>> = agriRepository.allProduceSales
 
     fun insert(harvest: Harvest) = viewModelScope.launch {
         agriRepository.insert(harvest)

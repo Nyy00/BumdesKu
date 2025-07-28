@@ -794,5 +794,13 @@ fun BumdesApp(
             )
         }
 
+        composable("agri_sale_report") {
+            val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
+            AgriSaleReportScreen(
+                viewModel = agriViewModel,
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
     }
 }

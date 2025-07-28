@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.sp
 import com.dony.bumdesku.data.FinancialHealthData
 import com.dony.bumdesku.data.UnitUsahaType
 import com.dony.bumdesku.viewmodel.DebtSummary
-import androidx.compose.material.icons.filled.Agriculture
 import java.text.NumberFormat
 import java.util.*
 
@@ -61,19 +60,7 @@ fun HomeScreen(
             FinancialHealthCard(data = financialHealthData)
             DebtSummaryCard(summary = debtSummary, onNavigate = onNavigate)
 
-            if (activeUnitUsahaType != UnitUsahaType.UMUM) {
-                MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
-                when (activeUnitUsahaType) {
-                    UnitUsahaType.TOKO -> TokoMenu(onNavigate)
-                    UnitUsahaType.WARKOP -> WarkopMenu(onNavigate)
-                    UnitUsahaType.JASA_SEWA -> JasaSewaMenu(onNavigate)
-                    UnitUsahaType.JASA_PEMBAYARAN -> JasaPembayaranMenu(onNavigate)
-                    UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
-                    else -> {}
-                }
-            }
-
-            // ✅ PERBAIKAN LOGIKA TAMPILAN MENU SESUAI PERMINTAAN ANDA
+            // ✅ PERBAIKAN: Gunakan satu blok if-else untuk logika menu
             if (userRole == "manager") {
                 // Untuk manajer, hanya tampilkan menu "Stok Panen"
                 MenuSeparator("Menu Laporan Cepat")
@@ -84,12 +71,14 @@ fun HomeScreen(
                     FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
                     Spacer(modifier = Modifier.weight(1f)) // Spacer agar tata letak tetap rapi
                 }
-
             } else if (activeUnitUsahaType != UnitUsahaType.UMUM) {
                 // Untuk pengurus, tampilkan menu sesuai unit usahanya
                 MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
                 when (activeUnitUsahaType) {
                     UnitUsahaType.TOKO -> TokoMenu(onNavigate)
+                    UnitUsahaType.WARKOP -> WarkopMenu(onNavigate)
+                    UnitUsahaType.JASA_SEWA -> JasaSewaMenu(onNavigate)
+                    UnitUsahaType.JASA_PEMBAYARAN -> JasaPembayaranMenu(onNavigate)
                     UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
                     else -> {}
                 }
@@ -105,7 +94,6 @@ fun HomeScreen(
                 FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.TrendingUp, title = "Perubahan Modal", onClick = { onNavigate("lpe_screen") })
             }
 
-            // --- MENU BUKU BESAR DIKEMBALIKAN DI SINI (UNTUK SEMUA PERAN) ---
             MenuSeparator("Menu Operasional")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 FeatureCard(
@@ -121,7 +109,6 @@ fun HomeScreen(
                     onClick = { onNavigate("account_list") }
                 )
             }
-            // -----------------------------------------------------------------
 
             if (userRole == "pengurus" || userRole == "manager") {
                 MenuSeparator("Menu Manajemen")
@@ -204,7 +191,8 @@ fun AgribisnisMenu(onNavigate: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) {
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { onNavigate("produce_sale") })
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Panen", onClick = { /* TODO: Navigasi ke laporan agribisnis */ })
+            // ✅ PERBAIKAN DI SINI:
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Panen", onClick = { onNavigate("agri_sale_report") })
         }
     }
 }
