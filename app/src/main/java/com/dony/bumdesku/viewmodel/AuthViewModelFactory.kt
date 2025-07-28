@@ -2,7 +2,7 @@ package com.dony.bumdesku.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.dony.bumdesku.repository.* // Import semua repositori
+import com.dony.bumdesku.repository.*
 
 class AuthViewModelFactory(
     private val unitUsahaRepository: UnitUsahaRepository,
@@ -10,7 +10,8 @@ class AuthViewModelFactory(
     private val assetRepository: AssetRepository,
     private val posRepository: PosRepository,
     private val accountRepository: AccountRepository,
-    private val debtRepository: DebtRepository // ✅ TAMBAHKAN PARAMETER INI
+    private val debtRepository: DebtRepository,
+    private val agriRepository: AgriRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
@@ -21,7 +22,8 @@ class AuthViewModelFactory(
                 assetRepository,
                 posRepository,
                 accountRepository,
-                debtRepository // ✅ BERIKAN REPOSITORY SAAT MEMBUAT VIEWMODEL
+                debtRepository,
+                agriRepository
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

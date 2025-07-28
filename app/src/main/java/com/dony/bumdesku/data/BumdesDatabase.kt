@@ -18,9 +18,11 @@ import java.util.UUID
         Account::class,
         Payable::class,
         Receivable::class,
-        Sale::class // <-- 1. Tambahkan kelas Sale di sini
+        Sale::class,
+        Harvest::class,
+        ProduceSale::class
     ],
-    version = 16, // <-- 2. NAIKKAN VERSI DATABASE
+    version = 17, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
@@ -30,7 +32,8 @@ abstract class BumdesDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
     abstract fun accountDao(): AccountDao
     abstract fun debtDao(): DebtDao
-    abstract fun saleDao(): SaleDao // <-- 3. Tambahkan abstract function untuk SaleDao
+    abstract fun saleDao(): SaleDao
+    abstract fun agriDao(): AgriDao
 
     companion object {
         @Volatile

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.dony.bumdesku.data.FinancialHealthData
 import com.dony.bumdesku.data.UnitUsahaType
 import com.dony.bumdesku.viewmodel.DebtSummary
+import androidx.compose.material.icons.filled.Agriculture
 import java.text.NumberFormat
 import java.util.*
 
@@ -67,6 +68,28 @@ fun HomeScreen(
                     UnitUsahaType.WARKOP -> WarkopMenu(onNavigate)
                     UnitUsahaType.JASA_SEWA -> JasaSewaMenu(onNavigate)
                     UnitUsahaType.JASA_PEMBAYARAN -> JasaPembayaranMenu(onNavigate)
+                    UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
+                    else -> {}
+                }
+            }
+
+            // ✅ PERBAIKAN LOGIKA TAMPILAN MENU SESUAI PERMINTAAN ANDA
+            if (userRole == "manager") {
+                // Untuk manajer, hanya tampilkan menu "Stok Panen"
+                MenuSeparator("Menu Laporan Cepat")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
+                    Spacer(modifier = Modifier.weight(1f)) // Spacer agar tata letak tetap rapi
+                }
+
+            } else if (activeUnitUsahaType != UnitUsahaType.UMUM) {
+                // Untuk pengurus, tampilkan menu sesuai unit usahanya
+                MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
+                when (activeUnitUsahaType) {
+                    UnitUsahaType.TOKO -> TokoMenu(onNavigate)
                     UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
                     else -> {}
                 }
@@ -168,9 +191,21 @@ fun JasaPembayaranMenu(onNavigate: (String) -> Unit) {
 
 @Composable
 fun AgribisnisMenu(onNavigate: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Agriculture, title = "Catat Panen", onClick = { /* TODO */ })
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { /* TODO */ })
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddBusiness, title = "Catat Panen", onClick = { onNavigate("add_harvest") })
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { onNavigate("produce_sale") })
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Panen", onClick = { /* TODO: Navigasi ke laporan agribisnis */ })
+        }
     }
 }
 

@@ -30,6 +30,14 @@ import com.dony.bumdesku.features.toko.PosViewModel
 import com.dony.bumdesku.features.toko.PosViewModelFactory
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
+import com.dony.bumdesku.features.agribisnis.*
+import com.dony.bumdesku.data.AgriDao
+import com.dony.bumdesku.features.agribisnis.AgriViewModel
+import com.dony.bumdesku.features.agribisnis.AgriViewModelFactory
+import com.dony.bumdesku.features.agribisnis.HarvestListScreen
+import com.dony.bumdesku.features.agribisnis.AddHarvestScreen
+import com.dony.bumdesku.features.agribisnis.ProduceSaleScreen
+import com.dony.bumdesku.repository.AgriRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 
@@ -45,7 +53,8 @@ class MainActivity : ComponentActivity() {
         val assetDao = database.assetDao()
         val accountDao = database.accountDao()
         val debtDao = database.debtDao()
-        val saleDao = database.saleDao() // Pastikan ini ada
+        val saleDao = database.saleDao()
+        val agriDao = database.agriDao()
 
         val accountRepository = AccountRepository(accountDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
@@ -53,6 +62,7 @@ class MainActivity : ComponentActivity() {
         val transactionRepository = TransactionRepository(transactionDao)
         val debtRepository = DebtRepository(debtDao)
         val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
+        val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
 
         // Inisialisasi ViewModel Factories (tidak ada perubahan di sini)
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
@@ -62,6 +72,7 @@ class MainActivity : ComponentActivity() {
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
         val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
+        val agriViewModelFactory = AgriViewModelFactory(agriRepository, unitUsahaRepository)
 
         // AuthViewModelFactory sekarang membutuhkan semua repositori
         val authViewModelFactory = AuthViewModelFactory(
@@ -70,7 +81,8 @@ class MainActivity : ComponentActivity() {
             assetRepository,
             posRepository,
             accountRepository,
-            debtRepository
+            debtRepository,
+            agriRepository
         )
 
         setContent {
@@ -83,8 +95,8 @@ class MainActivity : ComponentActivity() {
                     debtViewModelFactory = debtViewModelFactory,
                     salesReportViewModelFactory = salesReportViewModelFactory,
                     saleDetailViewModelFactory = saleDetailViewModelFactory,
-                    posViewModelFactory = posViewModelFactory
-                    // Kita tidak perlu lagi meneruskan AppRepositories
+                    posViewModelFactory = posViewModelFactory,
+                    agriViewModelFactory = agriViewModelFactory
                 )
             }
         }
@@ -100,7 +112,8 @@ fun BumdesApp(
     debtViewModelFactory: DebtViewModelFactory,
     salesReportViewModelFactory: SalesReportViewModelFactory,
     saleDetailViewModelFactory: SaleDetailViewModelFactory,
-    posViewModelFactory: PosViewModelFactory
+    posViewModelFactory: PosViewModelFactory,
+    agriViewModelFactory: AgriViewModelFactory,
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -749,5 +762,37 @@ fun BumdesApp(
                 )
             }
         }
+
+        // Rute untuk Fitur Agribisnis
+        composable("harvest_list") {
+            val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            HarvestListScreen(
+                viewModel = agriViewModel,
+                userRole = userProfile?.role ?: "pengurus",
+                onAddHarvestClick = { navController.navigate("add_harvest") },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("add_harvest") {
+            val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+            AddHarvestScreen(
+                viewModel = agriViewModel,
+                userRole = userProfile?.role ?: "pengurus",
+                activeUnitUsaha = activeUnitUsaha,
+                onSaveComplete = { navController.popBackStack() },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("produce_sale") {
+            ProduceSaleScreen(
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
     }
 }
