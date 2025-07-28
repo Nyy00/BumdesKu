@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
         val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
-        val agriViewModelFactory = AgriViewModelFactory(agriRepository, unitUsahaRepository)
+        val agriViewModelFactory = AgriViewModelFactory(agriRepository)
 
         // AuthViewModelFactory sekarang membutuhkan semua repositori
         val authViewModelFactory = AuthViewModelFactory(
@@ -789,8 +789,20 @@ fun BumdesApp(
         }
 
         composable("produce_sale") {
+            // Ambil semua ViewModel yang diperlukan
+            val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+
+            // Ambil data user yang sedang login dari AuthViewModel
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
             ProduceSaleScreen(
-                onNavigateUp = { navController.popBackStack() }
+                viewModel = agriViewModel,
+                userProfile = userProfile,
+                activeUnitUsaha = activeUnitUsaha,
+                onNavigateUp = { navController.popBackStack() },
+                onSaleComplete = { navController.popBackStack() } // Kembali setelah penjualan selesai
             )
         }
 

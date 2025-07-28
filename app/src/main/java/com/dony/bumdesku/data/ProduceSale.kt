@@ -6,11 +6,11 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "produce_sales")
 data class ProduceSale(
     @PrimaryKey
-    var id: String = "", // ID unik dari Firestore
+    var id: String = "",
 
-    val itemsJson: String, // Detail panen yang terjual dalam format JSON
-    val totalPrice: Double,
-    val transactionDate: Long,
-    val userId: String,
-    val unitUsahaId: String
+    val itemsJson: String = "", // ✅ Beri nilai default
+    val totalPrice: Double = 0.0, // ✅ Beri nilai default
+    val transactionDate: Long = 0L, // ✅ Beri nilai default
+    val userId: String = "", // ✅ Beri nilai default
+    val unitUsahaId: String = "" // ✅ Beri nilai default
 )

@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.dony.bumdesku.data.UserProfile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.data.Harvest
 import com.dony.bumdesku.data.UnitUsaha
@@ -248,12 +249,36 @@ fun AddHarvestScreen(
     }
 }
 
-// --- Layar Kasir Penjualan Hasil Panen (Kerangka Awal) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProduceSaleScreen(
-    onNavigateUp: () -> Unit
+    viewModel: AgriViewModel,
+    userProfile: UserProfile?,
+    activeUnitUsaha: UnitUsaha?,
+    onNavigateUp: () -> Unit,
+    onSaleComplete: () -> Unit
 ) {
+    val harvests by viewModel.allHarvests.collectAsStateWithLifecycle(initialValue = emptyList())
+    val cartItems by viewModel.cartItems.collectAsState()
+    val totalPrice by viewModel.totalPrice.collectAsState()
+    val saleState by viewModel.saleState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(saleState) {
+        when(saleState) {
+            ProduceSaleState.SUCCESS -> {
+                Toast.makeText(context, "Transaksi berhasil!", Toast.LENGTH_SHORT).show()
+                viewModel.resetSaleState()
+                onSaleComplete()
+            }
+            ProduceSaleState.ERROR -> {
+                Toast.makeText(context, "Gagal memproses transaksi.", Toast.LENGTH_SHORT).show()
+                viewModel.resetSaleState()
+            }
+            else -> {}
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -264,13 +289,137 @@ fun ProduceSaleScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            BottomAppBar(modifier = Modifier.height(80.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Total Harga")
+                        Text(
+                            text = NumberFormat.getCurrencyInstance(Locale("in", "ID")).format(totalPrice),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            if (userProfile != null && activeUnitUsaha != null) {
+                                viewModel.completeSale(userProfile, activeUnitUsaha)
+                            } else {
+                                Toast.makeText(context, "Sesi pengguna tidak valid.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = saleState != ProduceSaleState.LOADING && cartItems.isNotEmpty(),
+                        modifier = Modifier.height(50.dp)
+                    ) {
+                        if (saleState == ProduceSaleState.LOADING) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                        } else {
+                            Icon(Icons.Default.ShoppingCartCheckout, "Selesaikan Transaksi")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Bayar")
+                        }
+                    }
+                }
+            }
         }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier.fillMaxSize().padding(paddingValues),
-            contentAlignment = Alignment.Center
+        Row(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            // Kolom Kiri: Daftar Hasil Panen
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(harvests.filter { it.quantity > 0 }, key = { it.id }) { harvest ->
+                    HarvestSaleItem(
+                        harvest = harvest,
+                        onClick = {
+                            // Untuk agribisnis, kita asumsikan penjualan per satuan (1 Kg, 1 Ikat, dll)
+                            viewModel.addToCart(harvest, 1.0)
+                        }
+                    )
+                }
+            }
+
+            Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
+
+            // Kolom Kanan: Keranjang Belanja
+            CartPanel(
+                modifier = Modifier.weight(1f),
+                cartItems = cartItems,
+                onRemoveItem = { viewModel.removeFromCart(it) }
+            )
+        }
+    }
+}
+
+@Composable
+fun HarvestSaleItem(harvest: Harvest, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Fitur Kasir Agribisnis (Dalam Pengembangan)")
+            Text(harvest.name, fontWeight = FontWeight.Bold, maxLines = 2)
+            Text("Stok: ${harvest.quantity} ${harvest.unit}")
+            Text(NumberFormat.getCurrencyInstance(Locale("in", "ID")).format(harvest.sellingPrice))
+        }
+    }
+}
+
+@Composable
+fun CartPanel(
+    modifier: Modifier = Modifier,
+    cartItems: List<AgriCartItem>,
+    onRemoveItem: (AgriCartItem) -> Unit
+) {
+    Column(modifier = modifier.padding(8.dp)) {
+        Text("Keranjang", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(8.dp))
+        if (cartItems.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Keranjang kosong")
+            }
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(cartItems, key = { it.harvest.id }) { item ->
+                    AgriCartItemRow(
+                        item = item,
+                        onRemoveItem = { onRemoveItem(item) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AgriCartItemRow(item: AgriCartItem, onRemoveItem: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.harvest.name, fontWeight = FontWeight.Bold)
+                Text(
+                    "${item.quantity} ${item.harvest.unit} x ${NumberFormat.getCurrencyInstance(Locale("in", "ID")).format(item.harvest.sellingPrice)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            IconButton(onClick = onRemoveItem) {
+                Icon(Icons.Default.Delete, "Hapus Item", tint = MaterialTheme.colorScheme.error)
+            }
         }
     }
 }

@@ -1,22 +1,24 @@
 package com.dony.bumdesku.repository
 
 import android.util.Log
-import com.dony.bumdesku.data.AgriDao
-import com.dony.bumdesku.data.Harvest
-import com.dony.bumdesku.data.ProduceSale
+import com.dony.bumdesku.data.*
+import com.dony.bumdesku.features.agribisnis.AgriCartItem
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import java.io.IOException
 
 class AgriRepository(
     private val agriDao: AgriDao,
-    // Kita akan membutuhkan ini nanti untuk membuat jurnal otomatis
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository
 ) {
@@ -67,9 +69,67 @@ class AgriRepository(
         docRef.set(newHarvest).await()
     }
 
-    // ... (Fungsi untuk update & delete harvest bisa ditambahkan nanti jika perlu)
-    // ... (Fungsi untuk insert ProduceSale akan kita buat saat membangun layar kasir)
+    suspend fun processProduceSale(
+        cartItems: List<AgriCartItem>,
+        totalPrice: Double,
+        user: UserProfile,
+        activeUnitUsaha: UnitUsaha
+    ) {
+        withContext(Dispatchers.IO) {
+            // 1. Validasi Stok (Sama seperti di Toko)
+            for (cartItem in cartItems) {
+                val harvestInDb = allHarvests.first().find { it.id == cartItem.harvest.id }
+                if (harvestInDb == null || harvestInDb.quantity < cartItem.quantity) {
+                    throw IOException("Stok untuk ${cartItem.harvest.name} tidak mencukupi.")
+                }
+            }
 
+            // 2. Ambil Akun yang Diperlukan untuk Jurnal
+            val allAccounts = accountRepository.allAccounts.first()
+            val kasAccount = allAccounts.find { it.accountNumber == "111" }
+            // Asumsi kita menggunakan akun pendapatan yang sama dengan toko
+            val pendapatanAccount = allAccounts.find { it.accountNumber == "413" }
+
+            if (kasAccount == null || pendapatanAccount == null) {
+                throw IllegalStateException("Akun Kas (111) atau Pendapatan Penjualan (413) tidak ditemukan.")
+            }
+
+            // 3. Buat dan Simpan Data Penjualan (ProduceSale)
+            val saleDocRef = firestore.collection("produce_sales").document()
+            val produceSale = ProduceSale(
+                id = saleDocRef.id,
+                itemsJson = Gson().toJson(cartItems),
+                totalPrice = totalPrice,
+                transactionDate = System.currentTimeMillis(),
+                userId = user.uid,
+                unitUsahaId = activeUnitUsaha.id
+            )
+            saleDocRef.set(produceSale).await()
+
+            // 4. Buat dan Simpan Jurnal Transaksi Otomatis
+            val transaction = Transaction(
+                description = "Penjualan Hasil Panen - ${activeUnitUsaha.name}",
+                amount = totalPrice,
+                date = produceSale.transactionDate,
+                debitAccountId = kasAccount.id,
+                creditAccountId = pendapatanAccount.id,
+                debitAccountName = kasAccount.accountName,
+                creditAccountName = pendapatanAccount.accountName,
+                unitUsahaId = activeUnitUsaha.id,
+                userId = user.uid
+            )
+            transactionRepository.insert(transaction)
+
+            // 5. Perbarui (Kurangi) Stok Hasil Panen
+            cartItems.forEach { cartItem ->
+                val updatedHarvest = cartItem.harvest.copy(
+                    quantity = cartItem.harvest.quantity - cartItem.quantity
+                )
+                // Langsung update ke Firestore
+                firestore.collection("harvests").document(updatedHarvest.id).set(updatedHarvest).await()
+            }
+        }
+    }
 
     // --- Fungsi Bantuan Generik ---
     private inline fun <T : Any> handleFirestoreUpdate(
