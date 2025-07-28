@@ -20,9 +20,11 @@ import java.util.UUID
         Receivable::class,
         Sale::class,
         Harvest::class,
-        ProduceSale::class
+        ProduceSale::class,
+        ProductionCycle::class,
+        CycleCost::class
     ],
-    version = 17, // NAIKKAN VERSI DATABASE
+    version = 18, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
@@ -34,6 +36,7 @@ abstract class BumdesDatabase : RoomDatabase() {
     abstract fun debtDao(): DebtDao
     abstract fun saleDao(): SaleDao
     abstract fun agriDao(): AgriDao
+    abstract fun cycleDao(): CycleDao
 
     companion object {
         @Volatile

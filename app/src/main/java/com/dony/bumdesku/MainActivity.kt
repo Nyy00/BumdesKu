@@ -31,13 +31,6 @@ import com.dony.bumdesku.features.toko.PosViewModelFactory
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.dony.bumdesku.features.agribisnis.*
-import com.dony.bumdesku.data.AgriDao
-import com.dony.bumdesku.features.agribisnis.AgriViewModel
-import com.dony.bumdesku.features.agribisnis.AgriViewModelFactory
-import com.dony.bumdesku.features.agribisnis.HarvestListScreen
-import com.dony.bumdesku.features.agribisnis.AddHarvestScreen
-import com.dony.bumdesku.features.agribisnis.ProduceSaleScreen
-import com.dony.bumdesku.repository.AgriRepository
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 
@@ -46,7 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Inisialisasi Database dan Repositori (tidak ada perubahan di sini)
+        // Inisialisasi Database dan Repositori
         val database = BumdesDatabase.getDatabase(this)
         val transactionDao = database.transactionDao()
         val unitUsahaDao = database.unitUsahaDao()
@@ -55,6 +48,7 @@ class MainActivity : ComponentActivity() {
         val debtDao = database.debtDao()
         val saleDao = database.saleDao()
         val agriDao = database.agriDao()
+        val cycleDao = database.cycleDao()
 
         val accountRepository = AccountRepository(accountDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
@@ -63,8 +57,9 @@ class MainActivity : ComponentActivity() {
         val debtRepository = DebtRepository(debtDao)
         val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
         val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
+        val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
 
-        // Inisialisasi ViewModel Factories (tidak ada perubahan di sini)
+        // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
         val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
@@ -73,8 +68,8 @@ class MainActivity : ComponentActivity() {
         val salesReportViewModelFactory = SalesReportViewModelFactory(posRepository)
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
         val agriViewModelFactory = AgriViewModelFactory(agriRepository)
+        val agriCycleViewModelFactory = AgriCycleViewModelFactory(agriCycleRepository, accountRepository)
 
-        // AuthViewModelFactory sekarang membutuhkan semua repositori
         val authViewModelFactory = AuthViewModelFactory(
             unitUsahaRepository,
             transactionRepository,
@@ -82,7 +77,8 @@ class MainActivity : ComponentActivity() {
             posRepository,
             accountRepository,
             debtRepository,
-            agriRepository
+            agriRepository,
+            agriCycleRepository
         )
 
         setContent {
@@ -96,7 +92,8 @@ class MainActivity : ComponentActivity() {
                     salesReportViewModelFactory = salesReportViewModelFactory,
                     saleDetailViewModelFactory = saleDetailViewModelFactory,
                     posViewModelFactory = posViewModelFactory,
-                    agriViewModelFactory = agriViewModelFactory
+                    agriViewModelFactory = agriViewModelFactory,
+                    agriCycleViewModelFactory = agriCycleViewModelFactory
                 )
             }
         }
@@ -114,6 +111,7 @@ fun BumdesApp(
     saleDetailViewModelFactory: SaleDetailViewModelFactory,
     posViewModelFactory: PosViewModelFactory,
     agriViewModelFactory: AgriViewModelFactory,
+    agriCycleViewModelFactory: AgriCycleViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -122,27 +120,22 @@ fun BumdesApp(
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
     val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
 
-    // ✅ BLOK KODE YANG ANDA TUNJUKKAN TELAH DIHAPUS SELURUHNYA
-    // Semua logika sinkronisasi sekarang ada di dalam AuthViewModel.
-
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
     NavHost(navController = navController, startDestination = startDestination) {
 
+        // ... (Rute lain seperti "home", "login", "transaction_list", dll tidak berubah)
         composable("home") {
             val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val healthData by transactionViewModel.financialHealthData.collectAsStateWithLifecycle()
             val debtSummary by debtViewModel.debtSummary.collectAsStateWithLifecycle()
-            // Ambil unit usaha yang aktif dari AuthViewModel
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
-
 
             HomeScreen(
                 userRole = userProfile?.role ?: "pengurus",
                 financialHealthData = healthData,
                 debtSummary = debtSummary,
-                // Kirim tipe unit usaha yang aktif ke HomeScreen
                 activeUnitUsahaType = activeUnitUsaha?.type ?: UnitUsahaType.UMUM,
                 onNavigate = { route -> navController.navigate(route) }
             )
@@ -154,7 +147,6 @@ fun BumdesApp(
             )
             UnitUsahaManagementScreen(
                 unitUsahaList = unitUsahaList,
-                // Pastikan lambda mengirimkan objek UnitUsaha dengan tipe yang benar
                 onAddUnitUsaha = { unitName, unitType ->
                     transactionViewModel.insert(UnitUsaha(name = unitName, type = unitType))
                 },
@@ -176,7 +168,6 @@ fun BumdesApp(
                 onNavigateToRegister = { navController.navigate("register") }
             )
 
-            // --- NAVIGATION LOGIC SIMPLIFIED ---
             LaunchedEffect(navigationState) {
                 when (navigationState) {
                     LoginNavigationState.NAVIGATE_TO_HOME_SPESIFIK,
@@ -201,7 +192,6 @@ fun BumdesApp(
                 }
             }
 
-            // This handles error messages
             LaunchedEffect(authState) {
                 if (authState == AuthState.ERROR) {
                     Toast.makeText(context, errorMessage ?: "Login Gagal", Toast.LENGTH_SHORT)
@@ -211,7 +201,6 @@ fun BumdesApp(
             }
         }
 
-        // --- Rute Baru untuk Pemilihan Unit Usaha ---
         composable("unit_usaha_selection") {
             val unitUsahaList by authViewModel.userUnitUsahaList.collectAsStateWithLifecycle()
 
@@ -220,7 +209,6 @@ fun BumdesApp(
                 onUnitSelected = { selectedUnit ->
                     authViewModel.setActiveUnitUsaha(selectedUnit)
                     navController.navigate("home") {
-                        // Hapus layar pemilihan dari back stack
                         popUpTo("unit_usaha_selection") { inclusive = true }
                     }
                 },
@@ -241,7 +229,6 @@ fun BumdesApp(
             AccountListScreen(
                 accounts = accounts,
                 onAddAccountClick = { navController.navigate("add_account") },
-                // ✅ Arahkan ke rute baru saat akun diklik
                 onAccountClick = { account ->
                     navController.navigate("buku_pembantu/${account.id}")
                 },
@@ -263,12 +250,11 @@ fun BumdesApp(
 
 
         composable("register") {
-            // Kita butuh authViewModel di sini untuk mengambil daftar unit usaha
             val authState by authViewModel.authState.collectAsStateWithLifecycle()
             val errorMessage by authViewModel.errorMessage.collectAsStateWithLifecycle()
 
             RegisterScreen(
-                authViewModel = authViewModel, // Berikan ViewModel ke layar
+                authViewModel = authViewModel,
                 onRegisterClick = { email, password, unitUsahaId ->
                     authViewModel.registerUser(email, password, unitUsahaId)
                 },
@@ -313,11 +299,9 @@ fun BumdesApp(
                         Toast.makeText(localContext, message, Toast.LENGTH_LONG).show()
                     }
                 },
-                // ✅ Tambahkan aksi untuk tombol logout baru
                 onLogoutClick = {
                     authViewModel.logout()
                     navController.navigate("login") {
-                        // Hapus semua halaman sebelumnya dari back stack
                         popUpTo(navController.graph.findStartDestination().id) {
                             inclusive = true
                         }
@@ -326,10 +310,7 @@ fun BumdesApp(
             )
         }
 
-        // ✅ INI VERSI YANG BENAR DAN LENGKAP (yang duplikat sudah dihapus)
         composable("transaction_list") {
-
-            // Ambil data yang dibutuhkan, termasuk searchQuery
             val transactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle()
             val dashboardData by transactionViewModel.dashboardData.collectAsStateWithLifecycle()
             val chartData by transactionViewModel.chartData.collectAsStateWithLifecycle()
@@ -344,13 +325,9 @@ fun BumdesApp(
                 searchQuery = searchQuery,
                 onSearchQueryChange = transactionViewModel::onSearchQueryChange,
                 onAddItemClick = { navController.navigate("add_transaction") },
-
-                // ✅ PERBAIKAN DI SINI:
-                // Ubah transaction.localId menjadi transaction.id
                 onItemClick = { transaction ->
                     navController.navigate("edit_transaction/${transaction.id}")
                 },
-
                 onDeleteClick = { transaction -> transactionViewModel.delete(transaction) },
                 onNavigateUp = { navController.popBackStack() },
                 onNavigateToUnitUsaha = { navController.navigate("unit_usaha_management") },
@@ -374,23 +351,18 @@ fun BumdesApp(
 
         composable(
             "edit_transaction/{transactionId}",
-            // ✅ UBAH 1: Tipe argumen menjadi StringType
             arguments = listOf(navArgument("transactionId") { type = NavType.StringType })
         ) { backStackEntry ->
-            // ✅ UBAH 2: Ambil argumen sebagai String
             val transactionId = backStackEntry.arguments?.getString("transactionId")
             val localContext = LocalContext.current
 
             if (transactionId != null) {
-                // ✅ UBAH 3: Panggil fungsi ViewModel dengan ID yang sudah String
                 val transactionToEdit by transactionViewModel.getTransactionById(transactionId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
-                // LaunchedEffect digunakan agar Toast & navigasi hanya berjalan sekali
                 LaunchedEffect(transactionToEdit) {
                     transactionToEdit?.let { transaction ->
                         if (transaction.isLocked) {
-                            // Tampilkan pesan dan kembali jika terkunci
                             Toast.makeText(
                                 localContext,
                                 "Transaksi ini sudah dikunci dan tidak bisa diubah.",
@@ -401,7 +373,6 @@ fun BumdesApp(
                     }
                 }
 
-                // Tampilkan layar edit hanya jika data ada DAN tidak terkunci
                 transactionToEdit?.takeIf { !it.isLocked }?.let { transaction ->
                     AddTransactionScreen(
                         viewModel = transactionViewModel,
@@ -417,15 +388,14 @@ fun BumdesApp(
         }
 
         composable("asset_list") {
-            // Kita butuh AuthViewModel untuk mendapatkan peran pengguna
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
 
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
 
             AssetListScreen(
-                viewModel = assetViewModel, // Berikan ViewModel langsung
-                userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
+                viewModel = assetViewModel,
+                userRole = userProfile?.role ?: "pengurus",
                 onAddAssetClick = { navController.navigate("add_asset") },
                 onItemClick = { asset ->
                     navController.navigate("edit_asset/${asset.id}")
@@ -444,8 +414,8 @@ fun BumdesApp(
 
             AddAssetScreen(
                 viewModel = assetViewModel,
-                userRole = userProfile?.role ?: "pengurus", // Berikan peran pengguna
-                activeUnitUsaha = activeUnitUsaha, // Berikan unit usaha yang aktif
+                userRole = userProfile?.role ?: "pengurus",
+                activeUnitUsaha = activeUnitUsaha,
                 onSaveComplete = { navController.popBackStack() },
                 onNavigateUp = { navController.popBackStack() }
             )
@@ -453,10 +423,8 @@ fun BumdesApp(
 
         composable(
             "edit_asset/{assetId}",
-            // ✅ UBAH 1: Tipe argumen di sini harus StringType
             arguments = listOf(navArgument("assetId") { type = NavType.StringType })
         ) { backStackEntry ->
-            // ✅ UBAH 2: Ambil argumen sebagai String, bukan Int
             val assetId = backStackEntry.arguments?.getString("assetId")
             if (assetId != null) {
                 val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
@@ -464,7 +432,6 @@ fun BumdesApp(
                 val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
 
                 val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
-                // ✅ UBAH 3: Panggil fungsi ViewModel dengan assetId yang sekarang sudah String
                 val assetToEdit by assetViewModel.getAssetById(assetId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
@@ -481,20 +448,18 @@ fun BumdesApp(
             }
         }
         composable("report_screen") {
-
-            // Ambil semua state yang relevan dari ViewModel
             val reportData by transactionViewModel.reportData.collectAsState()
             val reportTransactions by transactionViewModel.filteredReportTransactions.collectAsState()
             val userProfile by authViewModel.userProfile.collectAsState()
             val unitUsahaList by transactionViewModel.allUnitUsaha.collectAsState(initial = emptyList())
-            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList()) // ✅ Ambil daftar akun
+            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList())
 
             ReportScreen(
                 reportData = reportData,
                 unitUsahaList = unitUsahaList,
                 userRole = userProfile?.role ?: "pengurus",
                 reportTransactions = reportTransactions,
-                allAccounts = allAccounts, // ✅ Berikan daftar akun ke ReportScreen
+                allAccounts = allAccounts,
                 onGenerateReport = { startDate, endDate, unitUsaha ->
                     transactionViewModel.generateReport(startDate, endDate, unitUsaha)
                 },
@@ -505,17 +470,15 @@ fun BumdesApp(
 
         composable("neraca_screen") {
             val neracaData by transactionViewModel.neracaData.collectAsStateWithLifecycle()
-            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList()) // Ambil semua akun
+            val allAccounts by transactionViewModel.allAccounts.collectAsState(initial = emptyList())
 
             NeracaScreen(
                 neracaData = neracaData,
                 onNavigateUp = { navController.popBackStack() },
                 onAccountClick = { neracaItem ->
-                    // Cari akun yang sesuai berdasarkan nama dari item neraca yang diklik
                     val targetAccount =
                         allAccounts.find { it.accountName == neracaItem.accountName }
                     if (targetAccount != null) {
-                        // Navigasi ke Buku Pembantu dengan ID akun yang ditemukan
                         navController.navigate("buku_pembantu/${targetAccount.id}")
                     }
                 }
@@ -621,13 +584,11 @@ fun BumdesApp(
         }
 
         composable("lpe_screen") {
-            // Ambil lpeData dari transactionViewModel yang sudah ada
             val lpeData by transactionViewModel.lpeData.collectAsStateWithLifecycle()
 
             LpeScreen(
                 lpeData = lpeData,
                 onGenerateLpe = { startDate, endDate ->
-                    // ✅ PERBAIKAN: Gunakan 'transactionViewModel' bukan 'viewModel'
                     transactionViewModel.generateLpe(startDate, endDate)
                 },
                 onNavigateUp = { navController.popBackStack() }
@@ -637,7 +598,6 @@ fun BumdesApp(
         composable("receivable_list") {
             val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
-            // Menggunakan viewModel langsung untuk mengakses semua state yang diperlukan
             ReceivableListScreen(
                 viewModel = debtViewModel,
                 userRole = userProfile?.role ?: "pengurus",
@@ -654,7 +614,7 @@ fun BumdesApp(
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
             ReceivableEntryScreen(
-                receivableToEdit = null, // Mode Tambah
+                receivableToEdit = null,
                 viewModel = debtViewModel,
                 userRole = userProfile?.role ?: "pengurus",
                 activeUnitUsaha = activeUnitUsaha,
@@ -672,19 +632,17 @@ fun BumdesApp(
 
         composable(
             "edit_receivable/{receivableId}",
-            // Pastikan argumen adalah String
             arguments = listOf(navArgument("receivableId") { type = NavType.StringType })
         ) { backStackEntry ->
             val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
-            // Ambil argumen sebagai String
             val receivableId = backStackEntry.arguments?.getString("receivableId")
             val receivableToEdit by debtViewModel.getReceivableById(receivableId ?: "").collectAsState(initial = null)
 
             if (receivableToEdit != null) {
                 ReceivableEntryScreen(
-                    receivableToEdit = receivableToEdit, // Mode Edit
+                    receivableToEdit = receivableToEdit,
                     viewModel = debtViewModel,
                     userRole = userProfile?.role ?: "pengurus",
                     activeUnitUsaha = activeUnitUsaha,
@@ -703,7 +661,6 @@ fun BumdesApp(
             LockJournalScreen(
                 onLockClick = { date ->
                     transactionViewModel.lockTransactionsUpTo(date) {
-                        // Beri tahu pengguna setelah selesai
                         Toast.makeText(localContext, "Jurnal berhasil dikunci!", Toast.LENGTH_SHORT)
                             .show()
                     }
@@ -713,15 +670,11 @@ fun BumdesApp(
         }
 
         composable("pos_screen") {
-            // Ambil ViewModel utama yang memegang state user
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
-
-            // Buat instance PosViewModel
             val posViewModel: PosViewModel = viewModel(factory = posViewModelFactory)
 
-            // Berikan data user dan unit usaha ke PosViewModel saat composable ini aktif
             LaunchedEffect(userProfile, activeUnitUsaha) {
                 posViewModel.userProfile.value = userProfile
                 posViewModel.activeUnitUsaha.value = activeUnitUsaha
@@ -740,7 +693,6 @@ fun BumdesApp(
                 viewModel = viewModel,
                 onNavigateUp = { navController.popBackStack() },
                 onSaleClick = { sale ->
-                    // Kirim objek sale sebagai JSON string saat navigasi
                     val saleJson = Gson().toJson(sale)
                     navController.navigate("sale_detail/${saleJson}")
                 }
@@ -763,7 +715,7 @@ fun BumdesApp(
             }
         }
 
-        // Rute untuk Fitur Agribisnis
+        // --- Rute Fitur Agribisnis ---
         composable("harvest_list") {
             val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
@@ -777,10 +729,12 @@ fun BumdesApp(
 
         composable("add_harvest") {
             val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
+            val agriCycleViewModel: AgriCycleViewModel = viewModel(factory = agriCycleViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
             AddHarvestScreen(
                 viewModel = agriViewModel,
+                cycleViewModel = agriCycleViewModel,
                 userRole = userProfile?.role ?: "pengurus",
                 activeUnitUsaha = activeUnitUsaha,
                 onSaveComplete = { navController.popBackStack() },
@@ -789,11 +743,8 @@ fun BumdesApp(
         }
 
         composable("produce_sale") {
-            // Ambil semua ViewModel yang diperlukan
             val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
-
-            // Ambil data user yang sedang login dari AuthViewModel
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
 
@@ -802,7 +753,7 @@ fun BumdesApp(
                 userProfile = userProfile,
                 activeUnitUsaha = activeUnitUsaha,
                 onNavigateUp = { navController.popBackStack() },
-                onSaleComplete = { navController.popBackStack() } // Kembali setelah penjualan selesai
+                onSaleComplete = { navController.popBackStack() }
             )
         }
 
@@ -814,5 +765,43 @@ fun BumdesApp(
             )
         }
 
+        // --- Rute Fitur Siklus Produksi ---
+        composable("production_cycle_list") {
+            val agriCycleViewModel: AgriCycleViewModel = viewModel(factory = agriCycleViewModelFactory)
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
+            LaunchedEffect(activeUnitUsaha) {
+                activeUnitUsaha?.id?.let {
+                    agriCycleViewModel.setActiveUnit(it)
+                }
+            }
+
+            ProductionCycleListScreen(
+                viewModel = agriCycleViewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onNavigateToCycleDetail = { cycleId ->
+                    navController.navigate("cycle_detail/$cycleId")
+                }
+            )
+        }
+
+        composable(
+            "cycle_detail/{cycleId}",
+            arguments = listOf(navArgument("cycleId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val cycleId = backStackEntry.arguments?.getString("cycleId")
+            if (cycleId != null) {
+                val agriCycleViewModel: AgriCycleViewModel = viewModel(factory = agriCycleViewModelFactory)
+
+                LaunchedEffect(key1 = cycleId) {
+                    agriCycleViewModel.getCycleDetails(cycleId)
+                }
+
+                CycleDetailScreen(
+                    viewModel = agriCycleViewModel,
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
+        }
     }
 }

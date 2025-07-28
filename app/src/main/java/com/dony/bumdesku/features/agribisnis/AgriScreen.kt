@@ -21,9 +21,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dony.bumdesku.data.UserProfile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.data.CycleStatus
 import com.dony.bumdesku.data.Harvest
+import com.dony.bumdesku.data.ProductionCycle
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
+import kotlinx.coroutines.flow.map
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
@@ -37,7 +40,6 @@ fun HarvestListScreen(
     onAddHarvestClick: () -> Unit,
     onNavigateUp: () -> Unit
 ) {
-    // ✅ PERBAIKAN DI SINI: Ubah 'initial' menjadi 'initialValue'
     val harvests by viewModel.allHarvests.collectAsStateWithLifecycle(initialValue = emptyList())
 
     Scaffold(
@@ -113,11 +115,12 @@ fun HarvestItem(harvest: Harvest) {
     }
 }
 
-// --- Layar untuk Menambah Catatan Panen Baru ---
+// --- Layar untuk Menambah Catatan Panen Baru (UPDATED) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddHarvestScreen(
     viewModel: AgriViewModel,
+    cycleViewModel: AgriCycleViewModel, // <-- Parameter baru
     userRole: String,
     activeUnitUsaha: UnitUsaha?,
     onSaveComplete: () -> Unit,
@@ -131,6 +134,26 @@ fun AddHarvestScreen(
     var sellingPrice by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     val dateState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+
+    // State untuk dropdown siklus
+    val completedCycles by cycleViewModel.productionCycles
+        .map { it.filter { cycle -> cycle.status == CycleStatus.SELESAI && !cycle.isArchived } }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    var selectedCycle by remember { mutableStateOf<ProductionCycle?>(null) }
+    var isCycleExpanded by remember { mutableStateOf(false) }
+
+    // Saat pengguna memilih siklus, otomatis isi nama dan modalnya
+    LaunchedEffect(selectedCycle) {
+        selectedCycle?.let {
+            name = it.name
+            costPrice = it.hppPerUnit.toLong().toString()
+        }
+    }
+
+    // Pastikan ViewModel mengambil data untuk unit usaha yang aktif
+    LaunchedEffect(activeUnitUsaha) {
+        activeUnitUsaha?.id?.let { cycleViewModel.setActiveUnit(it) }
+    }
 
     Scaffold(
         topBar = {
@@ -152,11 +175,41 @@ fun AddHarvestScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Dropdown untuk memilih siklus yang sudah selesai
+            ExposedDropdownMenuBox(
+                expanded = isCycleExpanded,
+                onExpandedChange = { isCycleExpanded = !isCycleExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedCycle?.name ?: "Pilih dari Siklus Selesai (Opsional)",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Ambil Data dari Siklus") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCycleExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = isCycleExpanded,
+                    onDismissRequest = { isCycleExpanded = false }
+                ) {
+                    completedCycles.forEach { cycle ->
+                        DropdownMenuItem(
+                            text = { Text(cycle.name) },
+                            onClick = {
+                                selectedCycle = cycle
+                                isCycleExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 label = { Text("Nama Hasil Panen (cth: Padi, Jagung)") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                readOnly = selectedCycle != null // Kunci input jika siklus dipilih
             )
 
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -179,10 +232,11 @@ fun AddHarvestScreen(
             OutlinedTextField(
                 value = costPrice,
                 onValueChange = { newValue -> costPrice = newValue.filter { it.isDigit() } },
-                label = { Text("Modal per Satuan (Opsional)") },
+                label = { Text("Modal per Satuan (HPP)") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                visualTransformation = ThousandSeparatorVisualTransformation()
+                visualTransformation = ThousandSeparatorVisualTransformation(),
+                readOnly = selectedCycle != null // Kunci input jika siklus dipilih
             )
 
             OutlinedTextField(
@@ -222,6 +276,12 @@ fun AddHarvestScreen(
                             unitUsahaId = unitUsahaId
                         )
                         viewModel.insert(newHarvest)
+
+                        // Arsipkan siklus jika dipilih
+                        selectedCycle?.let { cycleToArchive ->
+                            // cycleViewModel.archiveCycle(cycleToArchive) // This function needs to be added to AgriCycleViewModel
+                        }
+
                         Toast.makeText(context, "Data panen berhasil disimpan", Toast.LENGTH_SHORT).show()
                         onSaveComplete()
                     } else {
@@ -249,6 +309,7 @@ fun AddHarvestScreen(
     }
 }
 
+// --- Sisa file (ProduceSaleScreen, dll) tidak berubah ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProduceSaleScreen(
@@ -329,7 +390,6 @@ fun ProduceSaleScreen(
         }
     ) { paddingValues ->
         Row(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Kolom Kiri: Daftar Hasil Panen
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(8.dp),
@@ -339,7 +399,6 @@ fun ProduceSaleScreen(
                     HarvestSaleItem(
                         harvest = harvest,
                         onClick = {
-                            // Untuk agribisnis, kita asumsikan penjualan per satuan (1 Kg, 1 Ikat, dll)
                             viewModel.addToCart(harvest, 1.0)
                         }
                     )
@@ -348,7 +407,6 @@ fun ProduceSaleScreen(
 
             Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
 
-            // Kolom Kanan: Keranjang Belanja
             CartPanel(
                 modifier = Modifier.weight(1f),
                 cartItems = cartItems,

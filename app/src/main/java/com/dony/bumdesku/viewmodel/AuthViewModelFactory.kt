@@ -11,7 +11,8 @@ class AuthViewModelFactory(
     private val posRepository: PosRepository,
     private val accountRepository: AccountRepository,
     private val debtRepository: DebtRepository,
-    private val agriRepository: AgriRepository
+    private val agriRepository: AgriRepository,
+    private val agriCycleRepository: AgriCycleRepository // <-- TAMBAHKAN INI
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AuthViewModel::class.java)) {
@@ -23,7 +24,8 @@ class AuthViewModelFactory(
                 posRepository,
                 accountRepository,
                 debtRepository,
-                agriRepository
+                agriRepository,
+                agriCycleRepository // <-- TAMBAHKAN INI
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

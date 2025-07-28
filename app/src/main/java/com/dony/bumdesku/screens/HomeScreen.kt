@@ -185,6 +185,7 @@ fun AgribisnisMenu(onNavigate: (String) -> Unit) {
         ) {
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddBusiness, title = "Catat Panen", onClick = { onNavigate("add_harvest") })
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Autorenew, title = "Siklus Produksi", onClick = { onNavigate("production_cycle_list") })
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),

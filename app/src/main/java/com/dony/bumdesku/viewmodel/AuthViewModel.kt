@@ -37,7 +37,8 @@ class AuthViewModel(
     private val posRepository: PosRepository,
     private val accountRepository: AccountRepository,
     private val debtRepository: DebtRepository,
-    private val agriRepository: AgriRepository
+    private val agriRepository: AgriRepository,
+    private val agriCycleRepository: AgriCycleRepository
 ) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
@@ -83,9 +84,10 @@ class AuthViewModel(
             activeListeners.add(posRepository.syncAllSalesForManager())
             activeListeners.add(debtRepository.syncAllPayablesForManager())
             activeListeners.add(debtRepository.syncAllReceivablesForManager())
-            // ✅ 2. TAMBAHKAN SINKRONISASI AGRIBISNIS UNTUK MANAGER
             activeListeners.add(agriRepository.syncAllHarvestsForManager())
             activeListeners.add(agriRepository.syncAllProduceSalesForManager())
+             activeListeners.add(agriCycleRepository.syncAllCyclesForManager())
+             activeListeners.add(agriCycleRepository.syncAllCostsForManager())
         } catch (e: Exception) {
             Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
         }
@@ -115,9 +117,10 @@ class AuthViewModel(
                             activeListeners.add(posRepository.syncSalesForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(debtRepository.syncPayablesForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(debtRepository.syncReceivablesForUser(profile.managedUnitUsahaIds))
-                            // ✅ 3. TAMBAHKAN SINKRONISASI AGRIBISNIS UNTUK PENGURUS
                             activeListeners.add(agriRepository.syncHarvestsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncProduceSalesForUser(profile.managedUnitUsahaIds))
+                             activeListeners.add(agriCycleRepository.syncCyclesForUser(profile.managedUnitUsahaIds))
+                             activeListeners.add(agriCycleRepository.syncCostsForUser(userId))
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)
