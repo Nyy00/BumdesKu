@@ -57,22 +57,13 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            FinancialHealthCard(data = financialHealthData)
+            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
+            if (userRole == "manager") {
+                FinancialHealthCard(data = financialHealthData)
+            }
             DebtSummaryCard(summary = debtSummary, onNavigate = onNavigate)
 
-            // ✅ PERBAIKAN: Gunakan satu blok if-else untuk logika menu
-            if (userRole == "manager") {
-                // Untuk manajer, hanya tampilkan menu "Stok Panen"
-                MenuSeparator("Menu Laporan Cepat")
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
-                    Spacer(modifier = Modifier.weight(1f)) // Spacer agar tata letak tetap rapi
-                }
-            } else if (activeUnitUsahaType != UnitUsahaType.UMUM) {
-                // Untuk pengurus, tampilkan menu sesuai unit usahanya
+            if (activeUnitUsahaType != UnitUsahaType.UMUM) {
                 MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
                 when (activeUnitUsahaType) {
                     UnitUsahaType.TOKO -> TokoMenu(onNavigate)
@@ -87,12 +78,16 @@ fun HomeScreen(
             MenuSeparator("Menu Laporan")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Assessment, title = "Laba Rugi", onClick = { onNavigate("report_screen") })
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AccountBalance, title = "Neraca", onClick = { onNavigate("neraca_screen") })
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Balance, title = "Neraca Saldo", onClick = { onNavigate("neraca_saldo_screen") })
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.TrendingUp, title = "Perubahan Modal", onClick = { onNavigate("lpe_screen") })
             }
+            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
+            if (userRole == "manager") {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AccountBalance, title = "Neraca", onClick = { onNavigate("neraca_screen") })
+                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.TrendingUp, title = "Perubahan Modal", onClick = { onNavigate("lpe_screen") })
+                }
+            }
+
 
             MenuSeparator("Menu Operasional")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -102,24 +97,30 @@ fun HomeScreen(
                     title = "Buku Besar",
                     onClick = { onNavigate("transaction_list") }
                 )
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.AccountBalanceWallet,
-                    title = "Daftar Akun (COA)",
-                    onClick = { onNavigate("account_list") }
-                )
+                // [KONTROL AKSES] Hanya tampilkan untuk Manajer
+                if (userRole == "manager") {
+                    FeatureCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.AccountBalanceWallet,
+                        title = "Daftar Akun (COA)",
+                        onClick = { onNavigate("account_list") }
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f)) // Beri spacer agar layout tidak rusak
+                }
             }
 
-            if (userRole == "pengurus" || userRole == "manager") {
-                MenuSeparator("Menu Manajemen")
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddCircle, title = "Input Jurnal", onClick = { onNavigate("add_transaction") })
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignBottom, title = "Utang Usaha", onClick = { onNavigate("payable_list") })
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignTop, title = "Piutang Usaha", onClick = { onNavigate("receivable_list") })
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Manajemen Aset", onClick = { onNavigate("asset_list") })
-                }
+            MenuSeparator("Menu Manajemen")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddCircle, title = "Input Jurnal", onClick = { onNavigate("add_transaction") })
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignBottom, title = "Utang Usaha", onClick = { onNavigate("payable_list") })
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignTop, title = "Piutang Usaha", onClick = { onNavigate("receivable_list") })
+                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Aset & Inventaris", onClick = { onNavigate("asset_list") })
+            }
+            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
+            if (userRole == "manager") {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Store, title = "Unit Usaha", onClick = { onNavigate("unit_usaha_management") })
                     FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Lock, title = "Kunci Jurnal", onClick = { onNavigate("lock_journal") })
@@ -193,7 +194,7 @@ fun AgribisnisMenu(onNavigate: (String) -> Unit) {
         ) {
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { onNavigate("produce_sale") })
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory2, title = "Inventaris", onClick = { onNavigate("agri_inventory_list") }) // <-- TAMBAHKAN KARTU BARU
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Panen", onClick = { onNavigate("agri_sale_report") })
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Penjualan", onClick = { onNavigate("agri_sale_report") })
         }
     }
 }

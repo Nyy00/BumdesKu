@@ -75,6 +75,7 @@ fun AssetListScreen(
             .fillMaxSize()
             .padding(paddingValues)) {
 
+            // [KONTROL AKSES] Hanya tampilkan filter untuk Manajer
             if (userRole == "manager") {
                 var isExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(

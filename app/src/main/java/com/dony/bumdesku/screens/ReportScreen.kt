@@ -97,38 +97,40 @@ fun ReportScreen(
             }
 
             // Dropdown Filter Unit Usaha
-            ExposedDropdownMenuBox(
-                expanded = isUnitUsahaExpanded,
-                onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded },
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                OutlinedTextField(
-                    value = selectedUnitUsaha?.name ?: "Semua Unit Usaha",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Filter Unit Usaha") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
-                )
-                ExposedDropdownMenu(
+            if (userRole == "manager") {
+                ExposedDropdownMenuBox(
                     expanded = isUnitUsahaExpanded,
-                    onDismissRequest = { isUnitUsahaExpanded = false }
+                    onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded },
+                    modifier = Modifier.padding(top = 8.dp)
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Semua Unit Usaha") },
-                        onClick = {
-                            selectedUnitUsaha = null
-                            isUnitUsahaExpanded = false
-                        }
+                    OutlinedTextField(
+                        value = selectedUnitUsaha?.name ?: "Semua Unit Usaha",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Filter Unit Usaha") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
+                        modifier = Modifier.fillMaxWidth().menuAnchor()
                     )
-                    unitUsahaList.forEach { unit ->
+                    ExposedDropdownMenu(
+                        expanded = isUnitUsahaExpanded,
+                        onDismissRequest = { isUnitUsahaExpanded = false }
+                    ) {
                         DropdownMenuItem(
-                            text = { Text(unit.name) },
+                            text = { Text("Semua Unit Usaha") },
                             onClick = {
-                                selectedUnitUsaha = unit
+                                selectedUnitUsaha = null
                                 isUnitUsahaExpanded = false
                             }
                         )
+                        unitUsahaList.forEach { unit ->
+                            DropdownMenuItem(
+                                text = { Text(unit.name) },
+                                onClick = {
+                                    selectedUnitUsaha = unit
+                                    isUnitUsahaExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }

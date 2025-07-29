@@ -54,8 +54,8 @@ fun PayableListScreen(
         floatingActionButton = { FloatingActionButton(onClick = onAddItemClick) { Icon(Icons.Default.Add, "Tambah Utang") } }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Filter Dropdown untuk Manajer/Auditor
-            if (userRole == "manager" || userRole == "auditor") {
+            // [KONTROL AKSES] Hanya tampilkan filter untuk Manajer
+            if (userRole == "manager") {
                 var isExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = isExpanded,
@@ -167,7 +167,8 @@ fun ReceivableListScreen(
         floatingActionButton = { FloatingActionButton(onClick = onAddItemClick) { Icon(Icons.Default.Add, "Tambah Piutang") } }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            if (userRole == "manager" || userRole == "auditor") {
+            // [KONTROL AKSES] Hanya tampilkan filter untuk Manajer
+            if (userRole == "manager") {
                 var isExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = isExpanded,
