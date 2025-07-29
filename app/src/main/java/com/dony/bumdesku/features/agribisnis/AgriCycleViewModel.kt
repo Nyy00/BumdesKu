@@ -16,14 +16,21 @@ class AgriCycleViewModel(
 ) : ViewModel() {
 
     private val _activeUnitUsahaId = MutableStateFlow<String?>(null)
+
+    // --- PERBAIKAN UTAMA DI SINI ---
+    // Kita kembali menggunakan MutableStateFlow untuk kontrol penuh
+
     private val _selectedCycle = MutableStateFlow<ProductionCycle?>(null)
     val selectedCycle: StateFlow<ProductionCycle?> = _selectedCycle.asStateFlow()
+
     private val _cycleCosts = MutableStateFlow<List<CycleCost>>(emptyList())
     val cycleCosts: StateFlow<List<CycleCost>> = _cycleCosts.asStateFlow()
 
     private var cycleJob: Job? = null
     private var costsJob: Job? = null
 
+
+    // Flow lain tetap menggunakan stateIn karena tidak terpengaruh masalah ini
     val costAccounts: StateFlow<List<Account>> = accountRepository.allAccounts
         .map { accounts -> accounts.filter { it.category == AccountCategory.BEBAN } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -33,9 +40,33 @@ class AgriCycleViewModel(
         .flatMapLatest { unitId -> cycleRepository.getCyclesForUnit(unitId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+
     fun setActiveUnit(unitUsahaId: String) {
         _activeUnitUsahaId.value = unitUsahaId
     }
+
+    // Fungsi getCycleDetails sekarang akan mengelola job secara manual
+    fun getCycleDetails(cycleId: String) {
+        // Hentikan job lama jika ada untuk mencegah kebocoran memori
+        cycleJob?.cancel()
+        costsJob?.cancel()
+
+        // Mulai job baru untuk mengamati detail siklus
+        cycleJob = viewModelScope.launch {
+            cycleRepository.getCycleById(cycleId).collect { cycle ->
+                _selectedCycle.value = cycle
+            }
+        }
+
+        // Mulai job baru untuk mengamati rincian biaya
+        costsJob = viewModelScope.launch {
+            cycleRepository.getCostsForCycle(cycleId).collect { costs ->
+                _cycleCosts.value = costs
+            }
+        }
+    }
+
+    // --- Fungsi lain tidak ada perubahan ---
 
     fun createProductionCycle(name: String, startDate: Long) {
         viewModelScope.launch {
@@ -50,36 +81,17 @@ class AgriCycleViewModel(
         }
     }
 
-    // Fungsi addCostToCycle diperbarui untuk menerima unitUsahaId
     fun addCostToCycle(cycleId: String, unitUsahaId: String, description: String, amount: Double, costAccount: Account, paymentAccount: Account) {
         viewModelScope.launch {
             val newCost = CycleCost(
                 cycleId = cycleId,
-                unitUsahaId = unitUsahaId, // <-- Tambahkan unitUsahaId di sini
+                unitUsahaId = unitUsahaId,
                 date = System.currentTimeMillis(),
                 description = description,
                 amount = amount,
                 costCategoryId = costAccount.id
             )
-            // Di repository, ini akan membuat jurnal juga
             cycleRepository.insertCost(newCost, paymentAccount)
-        }
-    }
-
-    fun getCycleDetails(cycleId: String) {
-        cycleJob?.cancel()
-        costsJob?.cancel()
-
-        cycleJob = viewModelScope.launch {
-            cycleRepository.getCycleById(cycleId).collect { cycle ->
-                _selectedCycle.value = cycle
-            }
-        }
-
-        costsJob = viewModelScope.launch {
-            cycleRepository.getCostsForCycle(cycleId).collect { costs ->
-                _cycleCosts.value = costs
-            }
         }
     }
 
@@ -89,9 +101,6 @@ class AgriCycleViewModel(
         }
     }
 
-    /**
-     * Fungsi baru untuk memanggil repository agar mengarsipkan siklus.
-     */
     fun archiveCycle(cycle: ProductionCycle) {
         viewModelScope.launch {
             cycleRepository.archiveCycle(cycle)

@@ -130,12 +130,14 @@ class AgriCycleRepository(
                 }
             }
     }
-    fun syncCostsForUser(userId: String): ListenerRegistration {
+    fun syncCostsForUser(unitUsahaIds: List<String>): ListenerRegistration {
+        // Ubah query dari .whereEqualTo("userId", userId)
+        // menjadi .whereIn("unitUsahaId", unitUsahaIds)
         return firestore.collection("cycle_costs")
-            .whereEqualTo("userId", userId)
+            .whereIn("unitUsahaId", unitUsahaIds)
             .addSnapshotListener { snapshots, e ->
                 if (e != null) {
-                    Log.w("AgriCycleRepo", "Listen failed.", e)
+                    Log.w("AgriCycleRepo", "Listen for costs failed.", e)
                     return@addSnapshotListener
                 }
                 scope.launch {

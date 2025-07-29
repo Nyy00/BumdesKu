@@ -120,7 +120,7 @@ class AuthViewModel(
                             activeListeners.add(agriRepository.syncHarvestsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncProduceSalesForUser(profile.managedUnitUsahaIds))
                              activeListeners.add(agriCycleRepository.syncCyclesForUser(profile.managedUnitUsahaIds))
-                             activeListeners.add(agriCycleRepository.syncCostsForUser(userId))
+                            activeListeners.add(agriCycleRepository.syncCostsForUser(profile.managedUnitUsahaIds))
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)
