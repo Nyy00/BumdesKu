@@ -97,7 +97,7 @@ fun ReportScreen(
             }
 
             // Dropdown Filter Unit Usaha
-            if (userRole == "manager") {
+            if (userRole == "manager" || userRole == "auditor") {
                 ExposedDropdownMenuBox(
                     expanded = isUnitUsahaExpanded,
                     onExpandedChange = { isUnitUsahaExpanded = !isUnitUsahaExpanded },
