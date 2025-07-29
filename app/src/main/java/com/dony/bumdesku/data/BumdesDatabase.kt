@@ -22,9 +22,10 @@ import java.util.UUID
         Harvest::class,
         ProduceSale::class,
         ProductionCycle::class,
+        AgriInventory::class,
         CycleCost::class
     ],
-    version = 18, // NAIKKAN VERSI DATABASE
+    version = 19, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {

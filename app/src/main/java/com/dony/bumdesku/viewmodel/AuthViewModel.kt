@@ -88,6 +88,7 @@ class AuthViewModel(
             activeListeners.add(agriRepository.syncAllProduceSalesForManager())
              activeListeners.add(agriCycleRepository.syncAllCyclesForManager())
              activeListeners.add(agriCycleRepository.syncAllCostsForManager())
+            activeListeners.add(agriRepository.syncAllAgriInventoryForManager())
         } catch (e: Exception) {
             Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
         }
@@ -121,6 +122,7 @@ class AuthViewModel(
                             activeListeners.add(agriRepository.syncProduceSalesForUser(profile.managedUnitUsahaIds))
                              activeListeners.add(agriCycleRepository.syncCyclesForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriCycleRepository.syncCostsForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(agriRepository.syncAgriInventoryForUser(profile.managedUnitUsahaIds))
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)

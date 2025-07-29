@@ -26,4 +26,16 @@ interface AgriDao {
 
     @Query("DELETE FROM produce_sales")
     suspend fun deleteAllProduceSales()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllAgriInventory(inventory: List<AgriInventory>)
+
+    @Query("SELECT * FROM agri_inventory ORDER BY purchaseDate DESC")
+    fun getAllAgriInventory(): Flow<List<AgriInventory>>
+
+    @Query("DELETE FROM agri_inventory")
+    suspend fun deleteAllAgriInventory()
+
+    @Query("SELECT * FROM agri_inventory WHERE id = :id")
+    fun getInventoryById(id: String): Flow<AgriInventory?>
 }

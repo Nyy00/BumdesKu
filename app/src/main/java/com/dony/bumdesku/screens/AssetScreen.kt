@@ -49,7 +49,7 @@ fun AssetListScreen(
     onNavigateUp: () -> Unit,
     onDeleteClick: (Asset) -> Unit
 ) {
-    val assets by viewModel.filteredAssets.collectAsStateWithLifecycle()
+    val assets by viewModel.combinedAssets.collectAsStateWithLifecycle()
     val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedUnit by viewModel.selectedUnitFilter.collectAsStateWithLifecycle()
     var assetToDelete by remember { mutableStateOf<Asset?>(null) }

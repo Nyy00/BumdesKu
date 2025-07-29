@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
-        val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository)
+        val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository, agriRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository, unitUsahaRepository)
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)
@@ -69,6 +69,8 @@ class MainActivity : ComponentActivity() {
         val saleDetailViewModelFactory = SaleDetailViewModelFactory()
         val agriViewModelFactory = AgriViewModelFactory(agriRepository)
         val agriCycleViewModelFactory = AgriCycleViewModelFactory(agriCycleRepository, accountRepository)
+        val agriInventoryViewModelFactory = AgriInventoryViewModelFactory(agriRepository)
+
 
         val authViewModelFactory = AuthViewModelFactory(
             unitUsahaRepository,
@@ -93,7 +95,8 @@ class MainActivity : ComponentActivity() {
                     saleDetailViewModelFactory = saleDetailViewModelFactory,
                     posViewModelFactory = posViewModelFactory,
                     agriViewModelFactory = agriViewModelFactory,
-                    agriCycleViewModelFactory = agriCycleViewModelFactory
+                    agriCycleViewModelFactory = agriCycleViewModelFactory,
+                    agriInventoryViewModelFactory = agriInventoryViewModelFactory
                 )
             }
         }
@@ -111,7 +114,8 @@ fun BumdesApp(
     saleDetailViewModelFactory: SaleDetailViewModelFactory,
     posViewModelFactory: PosViewModelFactory,
     agriViewModelFactory: AgriViewModelFactory,
-    agriCycleViewModelFactory: AgriCycleViewModelFactory
+    agriCycleViewModelFactory: AgriCycleViewModelFactory,
+    agriInventoryViewModelFactory: AgriInventoryViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -390,7 +394,6 @@ fun BumdesApp(
         composable("asset_list") {
             val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
-
             val assetViewModel: AssetViewModel = viewModel(factory = assetViewModelFactory)
 
             AssetListScreen(
@@ -398,7 +401,12 @@ fun BumdesApp(
                 userRole = userProfile?.role ?: "pengurus",
                 onAddAssetClick = { navController.navigate("add_asset") },
                 onItemClick = { asset ->
-                    navController.navigate("edit_asset/${asset.id}")
+                    // <-- PERUBAHAN LOGIKA NAVIGASI DI SINI
+                    if (asset.category == "Inventaris Agribisnis") {
+                        navController.navigate("edit_agri_inventory/${asset.id}")
+                    } else {
+                        navController.navigate("edit_asset/${asset.id}")
+                    }
                 },
                 onNavigateUp = { navController.popBackStack() },
                 onDeleteClick = { asset -> assetViewModel.delete(asset) }
@@ -802,6 +810,51 @@ fun BumdesApp(
                     onNavigateUp = { navController.popBackStack() }
                 )
             }
+        }
+
+        composable(
+            "edit_agri_inventory/{inventoryId}",
+            arguments = listOf(navArgument("inventoryId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val inventoryId = backStackEntry.arguments?.getString("inventoryId")
+            if (inventoryId != null) {
+                val agriInventoryViewModel: AgriInventoryViewModel = viewModel(factory = agriInventoryViewModelFactory)
+                val inventoryToEdit by agriInventoryViewModel.getInventoryById(inventoryId)
+                    .collectAsStateWithLifecycle(initialValue = null)
+
+                // Tampilkan layar hanya jika data sudah berhasil diambil
+                inventoryToEdit?.let {
+                    AddAgriInventoryScreen(
+                        inventoryToEdit = it,
+                        viewModel = agriInventoryViewModel,
+                        activeUnitUsaha = null, // Tidak perlu saat edit
+                        onSaveComplete = { navController.popBackStack() },
+                        onNavigateUp = { navController.popBackStack() }
+                    )
+                }
+            }
+        }
+
+        composable("agri_inventory_list") {
+            val agriInventoryViewModel: AgriInventoryViewModel = viewModel(factory = agriInventoryViewModelFactory)
+            AgriInventoryListScreen(
+                viewModel = agriInventoryViewModel,
+                onAddInventoryClick = { navController.navigate("add_agri_inventory") },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("add_agri_inventory") {
+            val agriInventoryViewModel: AgriInventoryViewModel = viewModel(factory = agriInventoryViewModelFactory)
+            val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
+            AddAgriInventoryScreen(
+                viewModel = agriInventoryViewModel,
+                activeUnitUsaha = activeUnitUsaha,
+                onSaveComplete = { navController.popBackStack() },
+                onNavigateUp = { navController.popBackStack() }
+            )
         }
     }
 }

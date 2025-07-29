@@ -29,20 +29,33 @@ class AgriRepository(
     // --- Sumber Data untuk UI ---
     val allHarvests: Flow<List<Harvest>> = agriDao.getAllHarvests()
     val allProduceSales: Flow<List<ProduceSale>> = agriDao.getAllProduceSales()
+    val allAgriInventory: Flow<List<AgriInventory>> = agriDao.getAllAgriInventory()
 
     // --- Logika Sinkronisasi ---
 
     fun syncAllHarvestsForManager(): ListenerRegistration {
         return firestore.collection("harvests")
             .addSnapshotListener { snapshots, e ->
-                handleFirestoreUpdate(e, snapshots, agriDao::deleteAllHarvests, agriDao::insertAllHarvests, Harvest::class.java)
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllHarvests,
+                    agriDao::insertAllHarvests,
+                    Harvest::class.java
+                )
             }
     }
 
     fun syncHarvestsForUser(managedUnitIds: List<String>): ListenerRegistration {
         return firestore.collection("harvests").whereIn("unitUsahaId", managedUnitIds.take(30))
             .addSnapshotListener { snapshots, e ->
-                handleFirestoreUpdate(e, snapshots, agriDao::deleteAllHarvests, agriDao::insertAllHarvests, Harvest::class.java)
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllHarvests,
+                    agriDao::insertAllHarvests,
+                    Harvest::class.java
+                )
             }
     }
 
@@ -50,16 +63,63 @@ class AgriRepository(
     fun syncAllProduceSalesForManager(): ListenerRegistration {
         return firestore.collection("produce_sales")
             .addSnapshotListener { snapshots, e ->
-                handleFirestoreUpdate(e, snapshots, agriDao::deleteAllProduceSales, agriDao::insertAllProduceSales, ProduceSale::class.java)
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllProduceSales,
+                    agriDao::insertAllProduceSales,
+                    ProduceSale::class.java
+                )
             }
     }
 
     fun syncProduceSalesForUser(managedUnitIds: List<String>): ListenerRegistration {
         return firestore.collection("produce_sales").whereIn("unitUsahaId", managedUnitIds.take(30))
             .addSnapshotListener { snapshots, e ->
-                handleFirestoreUpdate(e, snapshots, agriDao::deleteAllProduceSales, agriDao::insertAllProduceSales, ProduceSale::class.java)
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllProduceSales,
+                    agriDao::insertAllProduceSales,
+                    ProduceSale::class.java
+                )
             }
     }
+
+    fun syncAllAgriInventoryForManager(): ListenerRegistration {
+        return firestore.collection("agri_inventory")
+            .addSnapshotListener { snapshots, e ->
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllAgriInventory,
+                    agriDao::insertAllAgriInventory,
+                    AgriInventory::class.java
+                )
+            }
+    }
+
+    fun syncAgriInventoryForUser(managedUnitIds: List<String>): ListenerRegistration {
+        return firestore.collection("agri_inventory")
+            .whereIn("unitUsahaId", managedUnitIds.take(30))
+            .addSnapshotListener { snapshots, e ->
+                handleFirestoreUpdate(
+                    e,
+                    snapshots,
+                    agriDao::deleteAllAgriInventory,
+                    agriDao::insertAllAgriInventory,
+                    AgriInventory::class.java
+                )
+            }
+    }
+
+    fun getInventoryById(id: String): Flow<AgriInventory?> = agriDao.getInventoryById(id)
+
+    suspend fun update(inventory: AgriInventory) {
+        if (inventory.id.isBlank()) return
+        firestore.collection("agri_inventory").document(inventory.id).set(inventory).await()
+    }
+
 
     // --- Operasi Tulis (Create, Update, Delete) ---
     suspend fun insert(harvest: Harvest) {
@@ -67,6 +127,13 @@ class AgriRepository(
         val docRef = firestore.collection("harvests").document()
         val newHarvest = harvest.copy(id = docRef.id, userId = userId)
         docRef.set(newHarvest).await()
+    }
+
+    suspend fun insert(inventory: AgriInventory) {
+        val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
+        val docRef = firestore.collection("agri_inventory").document()
+        val newInventory = inventory.copy(id = docRef.id, userId = userId)
+        docRef.set(newInventory).await()
     }
 
     suspend fun processProduceSale(
@@ -126,7 +193,8 @@ class AgriRepository(
                     quantity = cartItem.harvest.quantity - cartItem.quantity
                 )
                 // Langsung update ke Firestore
-                firestore.collection("harvests").document(updatedHarvest.id).set(updatedHarvest).await()
+                firestore.collection("harvests").document(updatedHarvest.id).set(updatedHarvest)
+                    .await()
             }
         }
     }
@@ -150,6 +218,7 @@ class AgriRepository(
                 when (obj) {
                     is Harvest -> obj.id = doc.id
                     is ProduceSale -> obj.id = doc.id
+                    is AgriInventory -> obj.id = doc.id
                 }
                 obj
             } ?: emptyList()

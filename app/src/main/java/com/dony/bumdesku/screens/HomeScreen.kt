@@ -192,12 +192,11 @@ fun AgribisnisMenu(onNavigate: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth()
         ) {
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { onNavigate("produce_sale") })
-            // ✅ PERBAIKAN DI SINI:
+            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory2, title = "Inventaris", onClick = { onNavigate("agri_inventory_list") }) // <-- TAMBAHKAN KARTU BARU
             FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Panen", onClick = { onNavigate("agri_sale_report") })
         }
     }
 }
-
 // Composable baru untuk membuat pemisah antar menu
 @Composable
 fun MenuSeparator(title: String) {
