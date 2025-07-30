@@ -46,7 +46,7 @@ fun NeracaSaldoScreen(
 
             // Daftar Akun
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(items, key = { it.accountNumber }) { item ->
+                items(items, key = { it.accountId }) { item -> // Kunci sekarang unik
                     NeracaSaldoItemRow(item = item)
                     Divider()
                 }

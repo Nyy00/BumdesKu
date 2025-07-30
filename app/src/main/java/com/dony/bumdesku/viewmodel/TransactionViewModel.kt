@@ -198,26 +198,28 @@ class TransactionViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NeracaData())
 
-    // ✅ PERBAIKAN LOGIKA FINANCIAL HEALTH DI SINI
     val financialHealthData: StateFlow<FinancialHealthData> = combine(allTransactions, allAccounts) { transactions, accounts ->
-        // Identifikasi akun aset lancar (nomor akun berawalan "11")
-        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }.map { it.id }
+        // --- 1. Logika Perhitungan Laba Rugi (diambil dari `dashboardData`) ---
+        val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+        val bebanIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
 
-        // Identifikasi akun kewajiban lancar (nomor akun berawalan "21")
+        val totalPendapatan = transactions.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
+        val totalBeban = transactions.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
+        val labaBersih = totalPendapatan - totalBeban
+
+        // --- 2. Logika Perhitungan Rasio Keuangan (yang sudah ada) ---
+        val asetLancarIds = accounts.filter { it.category == AccountCategory.ASET && it.accountNumber.startsWith("11") }.map { it.id }
         val kewajibanLancarIds = accounts.filter { it.category == AccountCategory.KEWAJIBAN && it.accountNumber.startsWith("21") }.map { it.id }
 
-        // Hitung total saldo Aset Lancar
         val totalAsetLancar = accounts.filter { it.id in asetLancarIds }.sumOf { acc ->
             val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
             val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
-            totalDebit - totalKredit // Saldo normal Aset adalah Debit
+            totalDebit - totalKredit
         }
-
-        // Hitung total saldo Kewajiban Lancar
         val totalKewajibanLancar = accounts.filter { it.id in kewajibanLancarIds }.sumOf { acc ->
             val totalDebit = transactions.filter { it.debitAccountId == acc.id }.sumOf { it.amount }
             val totalKredit = transactions.filter { it.creditAccountId == acc.id }.sumOf { it.amount }
-            totalKredit - totalDebit // Saldo normal Kewajiban adalah Kredit
+            totalKredit - totalDebit
         }
 
         val currentRatio = if (totalKewajibanLancar > 0) (totalAsetLancar / totalKewajibanLancar).toFloat() else 0f
@@ -228,27 +230,16 @@ class TransactionViewModel(
             currentRatio >= 1.0f -> HealthStatus.WASPADA
             else -> HealthStatus.TIDAK_SEHAT
         }
-        FinancialHealthData(currentRatio, status)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialHealthData())
 
-    val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, allAccounts) { transactions, accounts ->
-        val saldoItems = mutableListOf<NeracaSaldoItem>()
-        for (account in accounts) {
-            val totalDebit = transactions.filter { it.debitAccountId == account.id }.sumOf { it.amount }
-            val totalKredit = transactions.filter { it.creditAccountId == account.id }.sumOf { it.amount }
-            if (totalDebit > 0 || totalKredit > 0) {
-                saldoItems.add(
-                    NeracaSaldoItem(
-                        accountNumber = account.accountNumber,
-                        accountName = account.accountName,
-                        totalDebit = totalDebit,
-                        totalKredit = totalKredit
-                    )
-                )
-            }
-        }
-        saldoItems
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        // --- 3. Buat objek FinancialHealthData dengan SEMUA data yang sudah dihitung ---
+        FinancialHealthData(
+            currentRatio = currentRatio,
+            status = status,
+            labaRugi = labaBersih,
+            totalPendapatan = totalPendapatan,
+            totalBeban = totalBeban
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialHealthData())
 
     private val _lpeData = MutableStateFlow(LpeData())
     val lpeData: StateFlow<LpeData> = _lpeData.asStateFlow()
@@ -294,6 +285,27 @@ class TransactionViewModel(
             onComplete()
         }
     }
+
+    val neracaSaldoItems: StateFlow<List<NeracaSaldoItem>> = combine(allTransactions, allAccounts) { transactions, accounts ->
+        val saldoItems = mutableListOf<NeracaSaldoItem>()
+        for (account in accounts) {
+            val totalDebit = transactions.filter { it.debitAccountId == account.id }.sumOf { it.amount }
+            val totalKredit = transactions.filter { it.creditAccountId == account.id }.sumOf { it.amount }
+            if (totalDebit > 0 || totalKredit > 0) {
+                saldoItems.add(
+                    NeracaSaldoItem(
+                        accountId = account.id, // <-- PERBARUI DI SINI
+                        accountNumber = account.accountNumber,
+                        accountName = account.accountName,
+                        totalDebit = totalDebit,
+                        totalKredit = totalKredit
+                    )
+                )
+            }
+        }
+        saldoItems
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun getBukuPembantuData(accountId: String, accountCategory: AccountCategory): Flow<BukuPembantuData> {
         return allTransactions.map { transactions ->
             val filteredTx = transactions
