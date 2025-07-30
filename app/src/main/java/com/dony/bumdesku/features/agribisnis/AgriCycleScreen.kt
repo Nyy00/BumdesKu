@@ -293,10 +293,8 @@ fun AddCostDialog(
     var selectedCostAccount by remember { mutableStateOf<Account?>(null) }
     var isCostExpanded by remember { mutableStateOf(false) }
 
-    val paymentAccounts = listOf(
-        Account(id="dummyKas", accountNumber = "111", accountName = "Kas Tunai", category = AccountCategory.ASET),
-        Account(id="dummyBank", accountNumber = "112", accountName = "Bank", category = AccountCategory.ASET)
-    )
+    // [PERBAIKAN 1] Ambil daftar akun pembayaran dari ViewModel
+    val paymentAccounts by viewModel.paymentAccounts.collectAsStateWithLifecycle()
     var selectedPaymentAccount by remember { mutableStateOf<Account?>(null) }
     var isPaymentExpanded by remember { mutableStateOf(false) }
 
@@ -332,6 +330,7 @@ fun AddCostDialog(
                     }
                 }
 
+                // [PERBAIKAN 2] Gunakan `paymentAccounts` yang sudah berisi objek lengkap
                 ExposedDropdownMenuBox(expanded = isPaymentExpanded, onExpandedChange = { isPaymentExpanded = !isPaymentExpanded }) {
                     OutlinedTextField(
                         value = selectedPaymentAccount?.accountName ?: "Bayar Dari Akun Mana?",
@@ -350,9 +349,8 @@ fun AddCostDialog(
         confirmButton = {
             Button(onClick = {
                 val amountDouble = amount.toDoubleOrNull()
+                // [PERBAIKAN 3] Pastikan `selectedPaymentAccount` tidak null
                 if (description.isNotBlank() && amountDouble != null && selectedCostAccount != null && selectedPaymentAccount != null) {
-                    // --- PERBAIKAN DI SINI ---
-                    // Kirim cycle.unitUsahaId ke ViewModel
                     viewModel.addCostToCycle(cycle.id, cycle.unitUsahaId, description, amountDouble, selectedCostAccount!!, selectedPaymentAccount!!)
                     onDismiss()
                 } else {

@@ -143,32 +143,58 @@ class TransactionViewModel(
         val asetItems = mutableListOf<NeracaItem>()
         val kewajibanItems = mutableListOf<NeracaItem>()
         val modalItems = mutableListOf<NeracaItem>()
+
         val debits = transactions.groupBy { it.debitAccountId }
         val credits = transactions.groupBy { it.creditAccountId }
+
+        // [PERBAIKAN 1] Pisahkan kalkulasi Laba Bersih
+        val pendapatanIds = accounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
+        val bebanIds = accounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
+
+        val totalPendapatan = transactions.filter { it.creditAccountId in pendapatanIds }.sumOf { it.amount }
+        val totalBeban = transactions.filter { it.debitAccountId in bebanIds }.sumOf { it.amount }
+        val labaBersih = totalPendapatan - totalBeban
+
         for (account in accounts) {
             val totalDebit = debits[account.id]?.sumOf { it.amount } ?: 0.0
             val totalKredit = credits[account.id]?.sumOf { it.amount } ?: 0.0
-            val saldoAkhir = when (account.category) {
-                AccountCategory.ASET, AccountCategory.BEBAN -> totalDebit - totalKredit
-                else -> totalKredit - totalDebit
-            }
-            if(saldoAkhir != 0.0) {
-                val neracaItem = NeracaItem(account.accountName, saldoAkhir)
-                when (account.category) {
-                    AccountCategory.ASET -> asetItems.add(neracaItem)
-                    AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
-                    AccountCategory.MODAL -> modalItems.add(neracaItem)
-                    else -> {}
+
+            // Hanya proses akun neraca (Aset, Kewajiban, Modal)
+            if (account.category in listOf(AccountCategory.ASET, AccountCategory.KEWAJIBAN, AccountCategory.MODAL)) {
+                val saldoAkhir = when (account.category) {
+                    AccountCategory.ASET -> totalDebit - totalKredit
+                    else -> totalKredit - totalDebit // Kewajiban & Modal
+                }
+
+                if(saldoAkhir != 0.0) {
+                    val neracaItem = NeracaItem(account.accountName, saldoAkhir)
+                    when (account.category) {
+                        AccountCategory.ASET -> asetItems.add(neracaItem)
+                        AccountCategory.KEWAJIBAN -> kewajibanItems.add(neracaItem)
+                        AccountCategory.MODAL -> modalItems.add(neracaItem)
+                        else -> {}
+                    }
                 }
             }
         }
+
+        // [PERBAIKAN 2] Tambahkan Laba Bersih sebagai item di dalam Modal
+        if (labaBersih != 0.0) {
+            modalItems.add(NeracaItem("Laba/Rugi Tahun Berjalan", labaBersih))
+        }
+
+        val totalAset = asetItems.sumOf { it.balance }
+        val totalKewajiban = kewajibanItems.sumOf { it.balance }
+        // [PERBAIKAN 3] Total Modal sekarang adalah jumlah dari akun modal + laba bersih
+        val totalModal = modalItems.sumOf { it.balance }
+
         NeracaData(
             asetItems = asetItems,
             kewajibanItems = kewajibanItems,
             modalItems = modalItems,
-            totalAset = asetItems.sumOf { it.balance },
-            totalKewajiban = kewajibanItems.sumOf { it.balance },
-            totalModal = modalItems.sumOf { it.balance }
+            totalAset = totalAset,
+            totalKewajiban = totalKewajiban,
+            totalModal = totalModal
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NeracaData())
 

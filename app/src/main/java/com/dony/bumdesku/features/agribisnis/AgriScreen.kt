@@ -144,9 +144,16 @@ fun AddHarvestScreen(
 
     // Saat pengguna memilih siklus, otomatis isi nama dan modalnya
     LaunchedEffect(selectedCycle) {
-        selectedCycle?.let {
-            name = it.name
-            costPrice = it.hppPerUnit.toLong().toString()
+        selectedCycle?.let { cycle ->
+            name = cycle.name
+            costPrice = cycle.hppPerUnit.toLong().toString()
+            // Mengisi otomatis jumlah panen dari data siklus
+            quantity = if (cycle.totalHarvest % 1 == 0.0) {
+                // Jika angka bulat, hilangkan .0
+                cycle.totalHarvest.toLong().toString()
+            } else {
+                cycle.totalHarvest.toString()
+            }
         }
     }
 

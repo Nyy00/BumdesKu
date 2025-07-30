@@ -26,6 +26,20 @@ class AgriCycleViewModel(
     private val _cycleCosts = MutableStateFlow<List<CycleCost>>(emptyList())
     val cycleCosts: StateFlow<List<CycleCost>> = _cycleCosts.asStateFlow()
 
+    private val _paymentAccounts = MutableStateFlow<List<Account>>(emptyList())
+    val paymentAccounts: StateFlow<List<Account>> = _paymentAccounts.asStateFlow()
+
+    init {
+        // [BARU] Ambil data akun Kas dan Bank saat ViewModel dibuat
+        viewModelScope.launch {
+            accountRepository.allAccounts.collect { allAccounts ->
+                _paymentAccounts.value = allAccounts.filter {
+                    it.accountNumber == "111" || it.accountNumber == "112"
+                }
+            }
+        }
+    }
+
     private var cycleJob: Job? = null
     private var costsJob: Job? = null
 
