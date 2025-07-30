@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
+    <!-- Tema utama aplikasi Anda (tidak berubah) -->
     <style name="Theme.BumdesKu" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- [UBAH STYLE INI] Tema untuk Splash Screen -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Gunakan drawable kustom kita sebagai SELURUH latar belakang splash screen -->
+        <item name="windowSplashScreenBackground">@drawable/logo_bumdes</item>
+
+        <!-- Beritahu sistem untuk TIDAK menggambar ikon default di atas background kita -->
+        <item name="windowSplashScreenAnimatedIcon">@null</item>
+
+        <!-- Atur tema yang akan digunakan SETELAH splash screen selesai -->
+        <item name="postSplashScreenTheme">@style/Theme.BumdesKu</item>
+
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
 </resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Item 1: Warna Latar Belakang. Ganti @color/white dengan warna lain jika perlu. -->
+    <item android:drawable="@color/white" />
+
+    <!-- Item 2: Logo Anda di Tengah dengan Ukuran yang Lebih Besar -->
+    <item
+        android:width="150dp"
+        android:height="150dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/logo_bumdes" />
+    </item>
+
+</layer-list>
