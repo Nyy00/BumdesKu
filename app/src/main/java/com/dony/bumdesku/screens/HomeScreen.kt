@@ -1,19 +1,29 @@
 package com.dony.bumdesku.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dony.bumdesku.data.FinancialHealthData
@@ -22,7 +32,13 @@ import com.dony.bumdesku.viewmodel.DebtSummary
 import java.text.NumberFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+data class QuickAction(
+    val title: String,
+    val icon: ImageVector,
+    val route: String,
+    val isManagerOnly: Boolean = false
+)
+
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
@@ -31,268 +47,240 @@ fun HomeScreen(
     debtSummary: DebtSummary,
     activeUnitUsahaType: UnitUsahaType = UnitUsahaType.UMUM
 ) {
+    val baseActions = listOf(
+        QuickAction("Input Jurnal", Icons.Default.AddCircleOutline, "add_transaction"),
+        QuickAction("Buku Besar", Icons.AutoMirrored.Filled.MenuBook, "transaction_list"),
+        QuickAction("Laba Rugi", Icons.Default.Assessment, "report_screen"),
+        QuickAction("Aset & Stok", Icons.Default.Inventory, "asset_list"),
+        QuickAction("Utang", Icons.Default.ArrowDownward, "payable_list"),
+        QuickAction("Piutang", Icons.Default.ArrowUpward, "receivable_list")
+    )
+
+    val unitSpecificActions = when (activeUnitUsahaType) {
+        UnitUsahaType.TOKO -> listOf(
+            QuickAction("Kasir (POS)", Icons.Default.PointOfSale, "pos_screen"),
+            QuickAction("Laporan Penjualan", Icons.Default.Summarize, "sales_report")
+        )
+        UnitUsahaType.AGRIBISNIS -> listOf(
+            QuickAction("Catat Panen", Icons.Default.AddBusiness, "add_harvest"),
+            QuickAction("Stok Panen", Icons.AutoMirrored.Filled.ListAlt, "harvest_list"),
+            QuickAction("Siklus Produksi", Icons.Default.Autorenew, "production_cycle_list"),
+            QuickAction("Jual Hasil", Icons.Default.ShoppingCart, "produce_sale"),
+            QuickAction("Inventaris Agri", Icons.Default.Inventory2, "agri_inventory_list"),
+            QuickAction("Laporan Panen", Icons.Default.Summarize, "agri_sale_report")
+        )
+        else -> emptyList()
+    }
+
+    val managerActions = listOf(
+        QuickAction("Unit Usaha", Icons.Default.Store, "unit_usaha_management", isManagerOnly = true),
+        QuickAction("Daftar Akun", Icons.Default.AccountBalanceWallet, "account_list", isManagerOnly = true),
+        QuickAction("Kunci Jurnal", Icons.Default.Lock, "lock_journal", isManagerOnly = true),
+        QuickAction("Neraca", Icons.Default.AccountBalance, "neraca_screen", isManagerOnly = true),
+        QuickAction("Neraca Saldo", Icons.Default.Balance, "neraca_saldo_screen", isManagerOnly = true),
+        QuickAction("Perubahan Modal", Icons.Default.TrendingUp, "lpe_screen", isManagerOnly = true)
+    )
+
+    val allActions = baseActions + unitSpecificActions + managerActions
+    val availableActions = if (userRole == "manager") allActions else allActions.filter { !it.isManagerOnly }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("BUMDesKu Menu Utama") },
-                actions = {
-                    IconButton(onClick = { onNavigate("profile") }) {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "Profil"
-                        )
-                    }
-                }
-            )
-        }
+        containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(8.dp))
+            HomeHeader(onNavigate)
+            BalanceCard(financialHealthData)
+            DebtSummaryInfo(summary = debtSummary, onNavigate = onNavigate)
+            QuickActionsGrid(actions = availableActions, onNavigate = onNavigate)
+        }
+    }
+}
 
-            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
-            if (userRole == "manager") {
-                FinancialHealthCard(data = financialHealthData)
-            }
-            DebtSummaryCard(summary = debtSummary, onNavigate = onNavigate)
+@Composable
+fun HomeHeader(onNavigate: (String) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(
+                text = "Selamat Datang,",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+            )
+            Text(
+                text = "Pengelola BUMDes",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        IconButton(onClick = { onNavigate("profile") }) {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Profil",
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
 
-            if (activeUnitUsahaType != UnitUsahaType.UMUM) {
-                MenuSeparator("Menu Khusus: ${activeUnitUsahaType.name.replace("_", " ")}")
-                when (activeUnitUsahaType) {
-                    UnitUsahaType.TOKO -> TokoMenu(onNavigate)
-                    UnitUsahaType.WARKOP -> WarkopMenu(onNavigate)
-                    UnitUsahaType.JASA_SEWA -> JasaSewaMenu(onNavigate)
-                    UnitUsahaType.JASA_PEMBAYARAN -> JasaPembayaranMenu(onNavigate)
-                    UnitUsahaType.AGRIBISNIS -> AgribisnisMenu(onNavigate)
-                    else -> {}
-                }
-            }
+@Composable
+fun BalanceCard(data: FinancialHealthData) {
+    val localeID = Locale("in", "ID")
+    val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply {
+        maximumFractionDigits = 0
+    }
 
-            MenuSeparator("Menu Laporan")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Assessment, title = "Laba Rugi", onClick = { onNavigate("report_screen") })
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Balance, title = "Neraca Saldo", onClick = { onNavigate("neraca_saldo_screen") })
-            }
-            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
-            if (userRole == "manager") {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AccountBalance, title = "Neraca", onClick = { onNavigate("neraca_screen") })
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.TrendingUp, title = "Perubahan Modal", onClick = { onNavigate("lpe_screen") })
-                }
-            }
-
-
-            MenuSeparator("Menu Operasional")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FeatureCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.FormatListBulleted,
-                    title = "Buku Besar",
-                    onClick = { onNavigate("transaction_list") }
-                )
-                // [KONTROL AKSES] Hanya tampilkan untuk Manajer
-                if (userRole == "manager") {
-                    FeatureCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Default.AccountBalanceWallet,
-                        title = "Daftar Akun (COA)",
-                        onClick = { onNavigate("account_list") }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .height(180.dp),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(Color(0xFF004E92), Color(0xFF00294D))
                     )
-                } else {
-                    Spacer(modifier = Modifier.weight(1f)) // Beri spacer agar layout tidak rusak
+                )
+                .fillMaxSize()
+                .padding(24.dp)
+        ) {
+            Column(
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Text(
+                    "Total Laba Bersih",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+                Text(
+                    currencyFormat.format(data.labaRugi),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontSize = 32.sp
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row {
+                    Column {
+                        Text("Pendapatan", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+                        Text(currencyFormat.format(data.totalPendapatan), color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(24.dp))
+                    Column {
+                        Text("Beban", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+                        Text(currencyFormat.format(data.totalBeban), color = Color.White, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
-
-            MenuSeparator("Menu Manajemen")
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddCircle, title = "Input Jurnal", onClick = { onNavigate("add_transaction") })
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignBottom, title = "Utang Usaha", onClick = { onNavigate("payable_list") })
-            }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.VerticalAlignTop, title = "Piutang Usaha", onClick = { onNavigate("receivable_list") })
-                FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Aset & Inventaris", onClick = { onNavigate("asset_list") })
-            }
-            // [KONTROL AKSES] Hanya tampilkan untuk Manajer
-            if (userRole == "manager") {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Store, title = "Unit Usaha", onClick = { onNavigate("unit_usaha_management") })
-                    FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Lock, title = "Kunci Jurnal", onClick = { onNavigate("lock_journal") })
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-    }
-}
-// --- Composable untuk Menu-menu Spesifik ---
-
-@Composable
-fun TokoMenu(onNavigate: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PointOfSale, title = "Kasir (POS)", onClick = { onNavigate("pos_screen") })
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory, title = "Stok Barang", onClick = { onNavigate("asset_list") })
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Penjualan", onClick = { onNavigate("sales_report") })
-            Spacer(modifier = Modifier.weight(1f)) // Spacer agar tombol tetap rata kiri
         }
     }
 }
 
 @Composable
-fun WarkopMenu(onNavigate: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PointOfSale, title = "Kasir Warkop", onClick = { /* TODO */ })
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.MenuBook, title = "Daftar Menu", onClick = { /* TODO */ })
-    }
-}
-
-@Composable
-fun JasaSewaMenu(onNavigate: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddBusiness, title = "Input Penyewaan", onClick = { /* TODO */ })
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.CalendarToday, title = "Jadwal Sewa", onClick = { /* TODO */ })
-    }
-}
-
-@Composable
-fun JasaPembayaranMenu(onNavigate: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxWidth()) {
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ReceiptLong, title = "Bayar Tagihan", onClick = { /* TODO */ })
-        FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.PriceCheck, title = "Cek Tagihan", onClick = { /* TODO */ })
-    }
-}
-
-@Composable
-fun AgribisnisMenu(onNavigate: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ListAlt, title = "Stok Panen", onClick = { onNavigate("harvest_list") })
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.AddBusiness, title = "Catat Panen", onClick = { onNavigate("add_harvest") })
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Autorenew, title = "Siklus Produksi", onClick = { onNavigate("production_cycle_list") })
-        }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.ShoppingCart, title = "Penjualan Hasil", onClick = { onNavigate("produce_sale") })
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Inventory2, title = "Inventaris", onClick = { onNavigate("agri_inventory_list") }) // <-- TAMBAHKAN KARTU BARU
-            FeatureCard(modifier = Modifier.weight(1f), icon = Icons.Default.Summarize, title = "Laporan Penjualan", onClick = { onNavigate("agri_sale_report") })
-        }
-    }
-}
-// Composable baru untuk membuat pemisah antar menu
-@Composable
-fun MenuSeparator(title: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-        Divider(modifier = Modifier.padding(top = 4.dp))
-    }
-}
-
-@Composable
-fun DebtSummaryCard(summary: DebtSummary, onNavigate: (String) -> Unit) {
+fun DebtSummaryInfo(summary: DebtSummary, onNavigate: (String) -> Unit) {
     val localeID = Locale("in", "ID")
     val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        horizontalArrangement = Arrangement.SpaceAround
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Ringkasan Utang & Piutang", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            Divider()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigate("payable_list") }
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Total Utang Belum Dibayar:")
-                Text(
-                    text = currencyFormat.format(summary.totalPayable),
-                    color = Color.Red,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Divider()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigate("receivable_list") }
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Total Piutang Belum Diterima:")
-                Text(
-                    text = currencyFormat.format(summary.totalReceivable),
-                    color = Color(0xFF008800),
-                    fontWeight = FontWeight.SemiBold
-                )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable { onNavigate("payable_list") }
+        ) {
+            Text("Total Utang", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+            Text(
+                text = currencyFormat.format(summary.totalPayable),
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable { onNavigate("receivable_list") }
+        ) {
+            Text("Total Piutang", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f))
+            Text(
+                text = currencyFormat.format(summary.totalReceivable),
+                color = Color(0xFF008800),
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+@Composable
+fun QuickActionsGrid(actions: List<QuickAction>, onNavigate: (String) -> Unit) {
+    val gridHeight = (((actions.size - 1) / 4 + 1) * 110).dp
+
+    Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
+        Text(
+            "Menu & Fitur",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.height(gridHeight),
+            userScrollEnabled = false
+        ) {
+            items(actions) { action ->
+                QuickActionItem(action = action, onClick = { onNavigate(action.route) })
             }
         }
     }
 }
 
-
 @Composable
-fun FeatureCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = modifier
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+fun QuickActionItem(action: QuickAction, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(onClick = onClick)
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .size(60.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = icon,
-                contentDescription = title,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-                maxLines = 2
+                imageVector = action.icon,
+                contentDescription = action.title,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
             )
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = action.title,
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            lineHeight = 14.sp
+        )
     }
 }

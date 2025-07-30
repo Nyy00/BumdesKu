@@ -155,10 +155,10 @@ class AgriRepository(
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
             // Asumsi kita menggunakan akun pendapatan yang sama dengan toko
-            val pendapatanAccount = allAccounts.find { it.accountNumber == "413" }
+            val pendapatanAccount = allAccounts.find { it.accountNumber == "412" }
 
             if (kasAccount == null || pendapatanAccount == null) {
-                throw IllegalStateException("Akun Kas (111) atau Pendapatan Penjualan (413) tidak ditemukan.")
+                throw IllegalStateException("Akun Kas (111) atau Pendapatan Penjualan (412) tidak ditemukan.")
             }
 
             // 3. Buat dan Simpan Data Penjualan (ProduceSale)

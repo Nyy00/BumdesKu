@@ -103,7 +103,7 @@ class PosRepository(
 
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
-            val pendapatanAccount = allAccounts.find { it.accountNumber == "413" }
+            val pendapatanAccount = allAccounts.find { it.accountNumber == "411" }
 
             if (kasAccount == null || pendapatanAccount == null) {
                 throw IllegalStateException("Akun Kas atau Pendapatan Penjualan tidak ditemukan.")
