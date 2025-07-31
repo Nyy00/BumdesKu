@@ -32,6 +32,10 @@ fun UnitUsahaManagementScreen(
     var selectedType by remember { mutableStateOf(UnitUsahaType.UMUM) }
     val context = LocalContext.current
 
+    // ✅ --- TAMBAHAN ---
+    // State untuk menyimpan unit usaha yang akan dihapus
+    var unitToDelete by remember { mutableStateOf<UnitUsaha?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -128,7 +132,9 @@ fun UnitUsahaManagementScreen(
                                 Text(text = unit.name, style = MaterialTheme.typography.bodyLarge)
                                 Text(text = unit.type.name.replace("_", " "), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                             }
-                            IconButton(onClick = { onDeleteUnitUsaha(unit) }) {
+                            // ✅ --- PERUBAHAN ---
+                            // Tombol hapus sekarang akan menampilkan dialog
+                            IconButton(onClick = { unitToDelete = unit }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Hapus", tint = Color.Gray)
                             }
                         }
@@ -137,5 +143,31 @@ fun UnitUsahaManagementScreen(
                 }
             }
         }
+    }
+
+    // ✅ --- TAMBAHAN ---
+    // Composable untuk AlertDialog
+    if (unitToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { unitToDelete = null },
+            title = { Text("Konfirmasi Hapus") },
+            text = { Text("Apakah Anda yakin ingin menghapus unit usaha '${unitToDelete?.name}'? Semua data terkait unit ini akan hilang.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteUnitUsaha(unitToDelete!!)
+                        unitToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Hapus")
+                }
+            },
+            dismissButton = {
+                Button(onClick = { unitToDelete = null }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
