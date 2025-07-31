@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,7 +54,8 @@ fun HomeScreen(
         QuickAction("Laba Rugi", Icons.Default.Assessment, "report_screen"),
         QuickAction("Aset & Stok", Icons.Default.Inventory, "asset_list"),
         QuickAction("Utang", Icons.Default.ArrowDownward, "payable_list"),
-        QuickAction("Piutang", Icons.Default.ArrowUpward, "receivable_list")
+        QuickAction("Piutang", Icons.Default.ArrowUpward, "receivable_list"),
+        QuickAction("Neraca Saldo", Icons.Default.Balance, "neraca_saldo_screen")
     )
 
     val unitSpecificActions = when (activeUnitUsahaType) {
@@ -77,11 +79,16 @@ fun HomeScreen(
         QuickAction("Daftar Akun", Icons.Default.AccountBalanceWallet, "account_list", isManagerOnly = true),
         QuickAction("Kunci Jurnal", Icons.Default.Lock, "lock_journal", isManagerOnly = true),
         QuickAction("Neraca", Icons.Default.AccountBalance, "neraca_screen", isManagerOnly = true),
-        QuickAction("Neraca Saldo", Icons.Default.Balance, "neraca_saldo_screen", isManagerOnly = true),
         QuickAction("Perubahan Modal", Icons.Default.TrendingUp, "lpe_screen", isManagerOnly = true)
     )
 
-    val allActions = baseActions + unitSpecificActions + managerActions
+    val filteredBaseActions = if (activeUnitUsahaType == UnitUsahaType.AGRIBISNIS) {
+        baseActions.filter { it.route != "asset_list" }
+    } else {
+        baseActions
+    }
+
+    val allActions = filteredBaseActions + unitSpecificActions + managerActions
     val availableActions = if (userRole == "manager") allActions else allActions.filter { !it.isManagerOnly }
 
     Scaffold(
@@ -264,6 +271,7 @@ fun QuickActionItem(action: QuickAction, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(60.dp)
+                .shadow(elevation = 4.dp, shape = CircleShape)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center

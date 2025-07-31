@@ -42,7 +42,7 @@ fun BumdesKuTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography, // Typography dari file Type.kt tidak perlu diubah
+        typography = Typography,
         content = content
     )
 }
