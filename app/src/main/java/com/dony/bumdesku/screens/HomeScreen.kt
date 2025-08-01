@@ -69,7 +69,7 @@ fun HomeScreen(
             QuickAction("Siklus Produksi", Icons.Default.Autorenew, "production_cycle_list"),
             QuickAction("Jual Hasil", Icons.Default.ShoppingCart, "produce_sale"),
             QuickAction("Inventaris Agri", Icons.Default.Inventory2, "agri_inventory_list"),
-            QuickAction("Laporan Panen", Icons.Default.Summarize, "agri_sale_report")
+            QuickAction("Laporan Penjualan", Icons.Default.Summarize, "agri_sale_report")
         )
         else -> emptyList()
     }

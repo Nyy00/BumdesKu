@@ -100,6 +100,26 @@ class AgriViewModel(
         }
     }
 
+    fun updateQuantity(item: AgriCartItem, newQuantity: Double) {
+        viewModelScope.launch {
+            if (newQuantity <= 0) {
+                removeFromCart(item)
+                return@launch
+            }
+
+            val currentCart = _cartItems.value
+            val index = currentCart.indexOfFirst { it.harvest.id == item.harvest.id }
+
+            // Pastikan kuantitas baru tidak melebihi stok
+            if (index != -1 && newQuantity <= item.harvest.quantity) {
+                val updatedItem = currentCart[index].copy(quantity = newQuantity)
+                val newCart = currentCart.toMutableList().apply { set(index, updatedItem) }
+                _cartItems.value = newCart
+                updateTotalPrice()
+            }
+        }
+    }
+
     fun resetSaleState() {
         _saleState.value = ProduceSaleState.IDLE
     }

@@ -32,10 +32,8 @@ fun PosScreen(
     val products by posViewModel.filteredProducts.collectAsState()
     val searchQuery by posViewModel.searchQuery.collectAsState()
 
-    // --- Ambil state baru untuk kategori ---
     val categories by posViewModel.productCategories.collectAsState()
     val selectedCategory by posViewModel.selectedCategory.collectAsState()
-    // --------------------------------------
 
     val cartItems by posViewModel.cartItems.collectAsState()
     val totalPrice by posViewModel.totalPrice.collectAsState()
@@ -71,20 +69,21 @@ fun PosScreen(
         bottomBar = {
             PosBottomBar(
                 totalPrice = totalPrice,
-                // Panggil completeSale() tanpa parameter
                 onCompleteSale = { posViewModel.completeSale() },
                 isProcessing = saleState == SaleState.LOADING,
                 isCartEmpty = cartItems.isEmpty()
             )
         }
     ) {paddingValues ->
-        Row(
+        // ✅ --- PERUBAHAN UTAMA DI SINI ---
+        // Mengubah Row menjadi Column untuk tata letak atas-bawah.
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Kolom Kiri: Daftar Produk dengan Search Bar dan Tab Kategori
-            Column(modifier = Modifier.weight(1f)) {
+            // Bagian Atas: Daftar Produk
+            Column(modifier = Modifier.weight(1.5f)) { // Beri ruang lebih banyak untuk produk
                 // Search Bar
                 OutlinedTextField(
                     value = searchQuery,
@@ -97,8 +96,8 @@ fun PosScreen(
                     singleLine = true
                 )
 
-                // --- TAB KATEGORI BARU ---
-                if (categories.size > 1) { // Hanya tampilkan jika ada kategori
+                // Tab Kategori
+                if (categories.size > 1) {
                     ScrollableTabRow(
                         selectedTabIndex = categories.indexOf(selectedCategory),
                         edgePadding = 8.dp
@@ -112,7 +111,6 @@ fun PosScreen(
                         }
                     }
                 }
-                // -------------------------
 
                 ProductList(
                     products = products,
@@ -122,11 +120,12 @@ fun PosScreen(
                 )
             }
 
-            Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
+            // ✅ Divider horizontal sebagai pemisah
+            Divider(modifier = Modifier.padding(horizontal = 8.dp))
 
-            // Kolom Kanan: Keranjang Belanja
+            // Bagian Bawah: Keranjang Belanja
             CartPanel(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f), // Beri ruang lebih sedikit untuk keranjang
                 cartItems = cartItems,
                 onQuantityChange = { item, newQty ->
                     posViewModel.updateQuantity(item, newQty)
@@ -148,7 +147,6 @@ fun ProductList(modifier: Modifier = Modifier, products: List<Asset>, onProductC
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // ✅ PERBAIKAN DI SINI: Ubah 'it.localId' menjadi 'it.id'
         items(products.filter { it.quantity > 0 }, key = { it.id }) { product ->
             Card(
                 onClick = { onProductClick(product) },
@@ -207,44 +205,32 @@ fun CartItemRow(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally // Pusatkan semua item
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Nama Produk di paling atas
             Text(item.asset.name, fontWeight = FontWeight.Bold, maxLines = 1)
-
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Harga Jual di tengah
             Text(
-                formatCurrency(item.asset.sellingPrice), // Gunakan harga jual
+                formatCurrency(item.asset.sellingPrice),
                 style = MaterialTheme.typography.bodyLarge
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Tombol-tombol di paling bawah
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Tombol Kurangi
                 OutlinedButton(
                     onClick = { onQuantityChange(item.quantity - 1) },
-                    modifier = Modifier.size(40.dp), // Ukuran tombol
-                    contentPadding = PaddingValues(0.dp) // Hapus padding internal
+                    modifier = Modifier.size(40.dp),
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Icon(Icons.Default.Remove, "Kurangi")
                 }
-
-                // Teks Kuantitas
                 Text(
                     item.quantity.toString(),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-
-                // Tombol Tambah
                 OutlinedButton(
                     onClick = { onQuantityChange(item.quantity + 1) },
                     modifier = Modifier.size(40.dp),
@@ -252,10 +238,7 @@ fun CartItemRow(
                 ) {
                     Icon(Icons.Default.Add, "Tambah")
                 }
-
-                Spacer(modifier = Modifier.weight(1f)) // Spacer untuk mendorong tombol hapus ke kanan
-
-                // Tombol Hapus
+                Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = onRemoveItem) {
                     Icon(Icons.Default.Delete, "Hapus Item", tint = MaterialTheme.colorScheme.error)
                 }
@@ -263,6 +246,7 @@ fun CartItemRow(
         }
     }
 }
+
 @Composable
 fun PosBottomBar(
     totalPrice: Double,

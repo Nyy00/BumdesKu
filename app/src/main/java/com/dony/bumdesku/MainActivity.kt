@@ -24,8 +24,15 @@ import com.google.gson.Gson
 import com.dony.bumdesku.features.toko.report.SaleDetailScreen
 import com.dony.bumdesku.features.toko.report.SaleDetailViewModel
 import com.dony.bumdesku.features.toko.report.SaleDetailViewModelFactory
+import com.dony.bumdesku.features.agribisnis.AgriSaleDetailScreen
+import com.dony.bumdesku.features.agribisnis.AgriSaleDetailViewModel
+import com.dony.bumdesku.features.agribisnis.AgriSaleDetailViewModelFactory
 import com.dony.bumdesku.repository.*
 import com.dony.bumdesku.screens.*
+import com.dony.bumdesku.util.BluetoothPrinterService
+import android.Manifest
+import android.os.Build
+import androidx.core.app.ActivityCompat
 import com.dony.bumdesku.features.toko.PosScreen
 import com.dony.bumdesku.features.toko.PosViewModel
 import com.dony.bumdesku.features.toko.PosViewModelFactory
@@ -41,6 +48,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ),
+                1
+            )
+        } else {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_ADMIN,
+                    Manifest.permission.BLUETOOTH
+                ),
+                1
+            )
+        }
+
+        val printerService = BluetoothPrinterService(applicationContext)
 
         // Inisialisasi Database dan Repositori
         val database = BumdesDatabase.getDatabase(this)
@@ -73,6 +101,7 @@ class MainActivity : ComponentActivity() {
         val agriViewModelFactory = AgriViewModelFactory(agriRepository)
         val agriCycleViewModelFactory = AgriCycleViewModelFactory(agriCycleRepository, accountRepository)
         val agriInventoryViewModelFactory = AgriInventoryViewModelFactory(agriRepository)
+        val agriSaleDetailViewModelFactory = AgriSaleDetailViewModelFactory()
 
 
         val authViewModelFactory = AuthViewModelFactory(
@@ -99,7 +128,9 @@ class MainActivity : ComponentActivity() {
                     posViewModelFactory = posViewModelFactory,
                     agriViewModelFactory = agriViewModelFactory,
                     agriCycleViewModelFactory = agriCycleViewModelFactory,
-                    agriInventoryViewModelFactory = agriInventoryViewModelFactory
+                    agriInventoryViewModelFactory = agriInventoryViewModelFactory,
+                    agriSaleDetailViewModelFactory = agriSaleDetailViewModelFactory,
+                    printerService = printerService
                 )
             }
         }
@@ -118,7 +149,9 @@ fun BumdesApp(
     posViewModelFactory: PosViewModelFactory,
     agriViewModelFactory: AgriViewModelFactory,
     agriCycleViewModelFactory: AgriCycleViewModelFactory,
-    agriInventoryViewModelFactory: AgriInventoryViewModelFactory
+    agriInventoryViewModelFactory: AgriInventoryViewModelFactory,
+    agriSaleDetailViewModelFactory: AgriSaleDetailViewModelFactory,
+    printerService: BluetoothPrinterService
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -721,7 +754,8 @@ fun BumdesApp(
                 SaleDetailScreen(
                     viewModel = viewModel,
                     sale = sale,
-                    onNavigateUp = { navController.popBackStack() }
+                    onNavigateUp = { navController.popBackStack() },
+                    printerService = printerService
                 )
             }
         }
@@ -772,8 +806,30 @@ fun BumdesApp(
             val agriViewModel: AgriViewModel = viewModel(factory = agriViewModelFactory)
             AgriSaleReportScreen(
                 viewModel = agriViewModel,
-                onNavigateUp = { navController.popBackStack() }
+                onNavigateUp = { navController.popBackStack() },
+                // ✅ --- TAMBAHKAN NAVIGASI KE DETAIL SCREEN ---
+                onSaleClick = { sale ->
+                    val saleJson = Gson().toJson(sale)
+                    navController.navigate("agri_sale_detail/$saleJson")
+                }
             )
+        }
+
+        composable(
+            "agri_sale_detail/{saleJson}",
+            arguments = listOf(navArgument("saleJson") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val saleJson = backStackEntry.arguments?.getString("saleJson")
+            if (saleJson != null) {
+                val viewModel: AgriSaleDetailViewModel = viewModel(factory = agriSaleDetailViewModelFactory)
+                val sale = Gson().fromJson(saleJson, ProduceSale::class.java)
+                AgriSaleDetailScreen(
+                    viewModel = viewModel,
+                    sale = sale,
+                    onNavigateUp = { navController.popBackStack() },
+                    printerService = printerService
+                )
+            }
         }
 
         // --- Rute Fitur Siklus Produksi ---

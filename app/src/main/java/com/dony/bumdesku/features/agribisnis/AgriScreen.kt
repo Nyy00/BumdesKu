@@ -26,6 +26,11 @@ import com.dony.bumdesku.data.Harvest
 import com.dony.bumdesku.data.ProductionCycle
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
 import kotlinx.coroutines.flow.map
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -316,7 +321,6 @@ fun AddHarvestScreen(
     }
 }
 
-// --- Sisa file (ProduceSaleScreen, dll) tidak berubah ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProduceSaleScreen(
@@ -396,9 +400,11 @@ fun ProduceSaleScreen(
             }
         }
     ) { paddingValues ->
-        Row(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        // ✅ --- PERUBAHAN UTAMA: Row diubah menjadi Column ---
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            // Bagian Atas: Daftar Hasil Panen
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1.5f), // Beri porsi lebih besar
                 contentPadding = PaddingValues(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -412,16 +418,20 @@ fun ProduceSaleScreen(
                 }
             }
 
-            Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
+            Divider(modifier = Modifier.padding(horizontal = 8.dp))
 
             CartPanel(
                 modifier = Modifier.weight(1f),
                 cartItems = cartItems,
+                onQuantityChange = { item, newQty ->
+                    viewModel.updateQuantity(item, newQty)
+                },
                 onRemoveItem = { viewModel.removeFromCart(it) }
             )
         }
     }
 }
+
 
 @Composable
 fun HarvestSaleItem(harvest: Harvest, onClick: () -> Unit) {
@@ -446,20 +456,37 @@ fun HarvestSaleItem(harvest: Harvest, onClick: () -> Unit) {
 fun CartPanel(
     modifier: Modifier = Modifier,
     cartItems: List<AgriCartItem>,
+    // Tambahkan parameter baru untuk onQuantityChange
+    onQuantityChange: (AgriCartItem, Double) -> Unit,
     onRemoveItem: (AgriCartItem) -> Unit
 ) {
     Column(modifier = modifier.padding(8.dp)) {
         Text("Keranjang", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(8.dp))
         if (cartItems.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Keranjang kosong")
+            // Tampilan keranjang kosong yang lebih menarik
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = "Keranjang Kosong",
+                        modifier = Modifier.size(64.dp),
+                        tint = Color.Gray.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Keranjang masih kosong", color = Color.Gray)
+                }
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(cartItems, key = { it.harvest.id }) { item ->
                     AgriCartItemRow(
                         item = item,
+                        // Kirim aksi ke ViewModel
+                        onQuantityChange = { newQty -> onQuantityChange(item, newQty) },
                         onRemoveItem = { onRemoveItem(item) }
                     )
                 }
@@ -469,22 +496,143 @@ fun CartPanel(
 }
 
 @Composable
-fun AgriCartItemRow(item: AgriCartItem, onRemoveItem: () -> Unit) {
+fun AgriCartItemRow(
+    item: AgriCartItem,
+    onQuantityChange: (Double) -> Unit,
+    onRemoveItem: () -> Unit
+) {
+    val subtotal = item.harvest.sellingPrice * item.quantity
+    val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID")).apply { maximumFractionDigits = 0 }
+
+    var textQuantity by remember(item.quantity) {
+        mutableStateOf(if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else item.quantity.toString())
+    }
+    val focusManager = LocalFocusManager.current
+
+    // ✅ --- State untuk menampilkan dialog peringatan ---
+    var showStockAlert by remember { mutableStateOf(false) }
+
+    val confirmChanges = {
+        val newQty = textQuantity.toDoubleOrNull() ?: item.quantity
+
+        // ✅ --- LOGIKA PENGECEKAN STOK ---
+        if (newQty > item.harvest.quantity) {
+            // Jika kuantitas melebihi stok, tampilkan alert
+            showStockAlert = true
+            // Kembalikan teks ke jumlah stok maksimal
+            textQuantity = item.harvest.quantity.toString()
+        } else if (newQty != item.quantity) {
+            // Jika stok cukup dan nilai berubah, update kuantitas
+            onQuantityChange(newQty)
+        }
+        focusManager.clearFocus() // Sembunyikan keyboard
+    }
+
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(item.harvest.name, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Baris Atas: Nama produk dan tombol hapus (tidak berubah)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(item.harvest.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = onRemoveItem, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Delete, "Hapus Item", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+
+            // ✅ Tampilkan informasi stok di bawah nama produk
+            Text(
+                "Stok tersedia: ${item.harvest.quantity} ${item.harvest.unit}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Baris Bawah: Kontrol kuantitas dan subtotal
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Kontrol Kuantitas
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onQuantityChange(item.quantity - 1) },
+                        modifier = Modifier.size(40.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Default.Remove, "Kurangi")
+                    }
+
+                    OutlinedTextField(
+                        value = textQuantity,
+                        onValueChange = {
+                            if (it.matches(Regex("^\\d*\\.?\\d*\$"))) {
+                                textQuantity = it
+                            }
+                        },
+                        modifier = Modifier
+                            .width(80.dp)
+                            .onFocusChanged { focusState ->
+                                if (!focusState.isFocused) {
+                                    confirmChanges()
+                                }
+                            },
+                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { confirmChanges() }
+                        ),
+                        singleLine = true
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            // Cek stok sebelum menambah dengan tombol '+'
+                            if (item.quantity + 1 <= item.harvest.quantity) {
+                                onQuantityChange(item.quantity + 1)
+                            } else {
+                                showStockAlert = true
+                            }
+                        },
+                        modifier = Modifier.size(40.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.Default.Add, "Tambah")
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Subtotal per item (tidak berubah)
                 Text(
-                    "${item.quantity} ${item.harvest.unit} x ${NumberFormat.getCurrencyInstance(Locale("in", "ID")).format(item.harvest.sellingPrice)}",
-                    style = MaterialTheme.typography.bodySmall
+                    currencyFormat.format(subtotal),
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
-            IconButton(onClick = onRemoveItem) {
-                Icon(Icons.Default.Delete, "Hapus Item", tint = MaterialTheme.colorScheme.error)
-            }
         }
+    }
+
+    // ✅ --- AlertDialog untuk Peringatan Stok ---
+    if (showStockAlert) {
+        AlertDialog(
+            onDismissRequest = { showStockAlert = false },
+            title = { Text("Stok Tidak Cukup") },
+            text = { Text("Jumlah yang Anda masukkan melebihi stok yang tersedia (${item.harvest.quantity} ${item.harvest.unit}).") },
+            confirmButton = {
+                Button(onClick = { showStockAlert = false }) {
+                    Text("Mengerti")
+                }
+            }
+        )
     }
 }

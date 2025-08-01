@@ -21,7 +21,6 @@ import java.util.*
 class AssetRepository(private val assetDao: AssetDao) {
 
     private val firestore = Firebase.firestore
-    private val storage = Firebase.storage
     private val auth = Firebase.auth
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -89,24 +88,16 @@ class AssetRepository(private val assetDao: AssetDao) {
         return assetDao.getAssetById(id)
     }
 
-    suspend fun insert(asset: Asset, imageUri: Uri?) {
+    suspend fun insert(asset: Asset) { // Hapus parameter imageUri
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
-        var imageUrl = ""
 
-        if (imageUri != null) {
-            try {
-                imageUrl = uploadAssetImage(imageUri)
-            } catch (e: Exception) {
-                Log.e("AssetRepository", "Image upload failed", e)
-                throw e
-            }
-        }
-
+        // Langsung buat objek asset baru tanpa imageUrl
         val newAsset = asset.copy(
             userId = userId,
-            imageUrl = imageUrl
+            imageUrl = "" // Selalu kosong
         )
 
+        // Simpan ke Firestore
         val docRef = firestore.collection("assets").add(newAsset).await()
         update(newAsset.copy(id = docRef.id))
     }
@@ -122,11 +113,4 @@ class AssetRepository(private val assetDao: AssetDao) {
         }
     }
 
-    private suspend fun uploadAssetImage(imageUri: Uri): String {
-        val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
-        val fileName = "asset_${UUID.randomUUID()}.jpg"
-        val storageRef = storage.reference.child("assets/$userId/$fileName")
-        storageRef.putFile(imageUri).await()
-        return storageRef.downloadUrl.await().toString()
-    }
 }

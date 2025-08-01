@@ -23,8 +23,8 @@ import java.util.*
 @Composable
 fun AgriSaleReportScreen(
     viewModel: AgriViewModel,
-    onNavigateUp: () -> Unit
-    // onItemClick akan kita tambahkan nanti jika perlu melihat detail
+    onNavigateUp: () -> Unit,
+    onSaleClick: (ProduceSale) -> Unit
 ) {
     val salesHistory by viewModel.allProduceSales.collectAsState(initial = emptyList())
 
@@ -56,7 +56,7 @@ fun AgriSaleReportScreen(
                 items(salesHistory, key = { it.id }) { sale ->
                     ProduceSaleHistoryItem(
                         sale = sale,
-                        onClick = { /* TODO: Navigasi ke detail jika perlu */ }
+                        onClick = { onSaleClick(sale) }
                     )
                 }
             }

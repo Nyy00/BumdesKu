@@ -76,11 +76,12 @@ class AssetViewModel(
         _selectedUnitFilter.value = unitUsaha
     }
 
-    fun insert(asset: Asset, imageUri: Uri?) {
+    fun insert(asset: Asset) { // Hapus parameter imageUri
         viewModelScope.launch {
             _uploadState.value = UploadState.UPLOADING
             try {
-                repository.insert(asset, imageUri)
+                // Panggil repository tanpa imageUri
+                repository.insert(asset)
                 _uploadState.value = UploadState.SUCCESS
             } catch (e: Exception) {
                 Log.e("AssetViewModel", "Insert asset failed", e)
@@ -88,7 +89,6 @@ class AssetViewModel(
             }
         }
     }
-
     fun update(asset: Asset) = viewModelScope.launch {
         repository.update(asset)
     }

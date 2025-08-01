@@ -1,9 +1,7 @@
 package com.dony.bumdesku.screens
 
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -238,7 +236,6 @@ fun AddAssetScreen(
     var quantity by remember { mutableStateOf("") }
     var purchasePrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
     var category by remember { mutableStateOf("") }
     var isCategoryExpanded by remember { mutableStateOf(false) }
 
@@ -273,11 +270,6 @@ fun AddAssetScreen(
     }
 
     val uploadState by viewModel.uploadState.collectAsStateWithLifecycle()
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        imageUri = uri
-    }
 
     LaunchedEffect(uploadState) {
         if (uploadState == UploadState.SUCCESS) {
@@ -295,7 +287,10 @@ fun AddAssetScreen(
             TopAppBar(
                 title = { Text(if (isEditMode) "Edit Aset" else "Tambah Aset Baru") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp, enabled = uploadState != UploadState.UPLOADING) {
+                    IconButton(
+                        onClick = onNavigateUp,
+                        enabled = uploadState != UploadState.UPLOADING
+                    ) {
                         Icon(Icons.Default.ArrowBack, "Kembali")
                     }
                 }
@@ -389,7 +384,9 @@ fun AddAssetScreen(
 
                 OutlinedTextField(
                     value = purchasePrice,
-                    onValueChange = { newValue -> purchasePrice = newValue.filter { it.isDigit() } },
+                    onValueChange = { newValue ->
+                        purchasePrice = newValue.filter { it.isDigit() }
+                    },
                     label = { Text("Harga Beli Satuan (Modal)") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -419,67 +416,64 @@ fun AddAssetScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    OutlinedButton(onClick = { imagePickerLauncher.launch("image/*") }) {
-                        Text("Pilih Gambar")
-                    }
-                    imageUri?.let {
-                        Image(
-                            painter = rememberAsyncImagePainter(it),
-                            contentDescription = "Preview Gambar Aset",
-                            modifier = Modifier.size(100.dp).clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
 
-                Button(
-                    onClick = {
-                        val quantityInt = quantity.toIntOrNull()
-                        val priceDouble = purchasePrice.toDoubleOrNull()
-                        val sellingPriceDouble = sellingPrice.toDoubleOrNull()
-                        val finalUnitUsahaId = selectedUnitUsaha?.id
+                    Button(
+                        onClick = {
+                            val quantityInt = quantity.toIntOrNull()
+                            val priceDouble = purchasePrice.toDoubleOrNull()
+                            val sellingPriceDouble = sellingPrice.toDoubleOrNull()
+                            val finalUnitUsahaId = selectedUnitUsaha?.id
 
-                        if (name.isNotBlank() && finalUnitUsahaId != null && quantityInt != null && priceDouble != null && sellingPriceDouble != null) {
-                            val finalCategory = category.trim().ifBlank { "Lain-lain" }
-                            if (isEditMode) {
-                                val updatedAsset = assetToEdit!!.copy(
-                                    name = name,
-                                    unitUsahaId = finalUnitUsahaId,
-                                    quantity = quantityInt,
-                                    purchasePrice = priceDouble,
-                                    sellingPrice = sellingPriceDouble,
-                                    description = description,
-                                    category = finalCategory
-                                )
-                                viewModel.update(updatedAsset)
-                                Toast.makeText(context, "Aset berhasil diperbarui", Toast.LENGTH_SHORT).show()
-                                onSaveComplete()
+                            if (name.isNotBlank() && finalUnitUsahaId != null && quantityInt != null && priceDouble != null && sellingPriceDouble != null) {
+                                val finalCategory = category.trim().ifBlank { "Lain-lain" }
+                                if (isEditMode) {
+                                    val updatedAsset = assetToEdit!!.copy(
+                                        name = name,
+                                        unitUsahaId = finalUnitUsahaId,
+                                        quantity = quantityInt,
+                                        purchasePrice = priceDouble,
+                                        sellingPrice = sellingPriceDouble,
+                                        description = description,
+                                        category = finalCategory
+                                    )
+                                    viewModel.update(updatedAsset)
+                                    Toast.makeText(
+                                        context,
+                                        "Aset berhasil diperbarui",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    onSaveComplete()
+                                } else {
+                                    val newAsset = Asset(
+                                        name = name,
+                                        unitUsahaId = finalUnitUsahaId,
+                                        quantity = quantityInt,
+                                        purchasePrice = priceDouble,
+                                        sellingPrice = sellingPriceDouble,
+                                        description = description,
+                                        category = finalCategory
+                                    )
+                                    viewModel.insert(newAsset)
+                                }
                             } else {
-                                val newAsset = Asset(
-                                    name = name,
-                                    unitUsahaId = finalUnitUsahaId,
-                                    quantity = quantityInt,
-                                    purchasePrice = priceDouble,
-                                    sellingPrice = sellingPriceDouble,
-                                    description = description,
-                                    category = finalCategory
-                                )
-                                viewModel.insert(newAsset, imageUri)
+                                Toast.makeText(
+                                    context,
+                                    "Harap isi semua kolom dengan benar, termasuk Unit Usaha",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
-                        } else {
-                            Toast.makeText(context, "Harap isi semua kolom dengan benar, termasuk Unit Usaha", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = uploadState != UploadState.UPLOADING
-                ) {
-                    Text("Simpan")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = uploadState != UploadState.UPLOADING
+                    ) {
+                        Text("Simpan")
+                    }
                 }
-            }
-            if (uploadState == UploadState.UPLOADING) {
-                CircularProgressIndicator()
+                if (uploadState == UploadState.UPLOADING) {
+                    CircularProgressIndicator()
+                }
             }
         }
     }
