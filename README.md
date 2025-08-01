@@ -96,7 +96,7 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 | Halaman Utama | Kasir Toko | Struk Digital |
 | :---: | :---: | :---: |
-| ![Tampilan Halaman Utama](app/screenshoot/home.png)| ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) ![Tampilan Kasir Toko](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
+| ![Tampilan Halaman Utama](app/screenshoot/home.png)| ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Toko](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
 
 
 ---
