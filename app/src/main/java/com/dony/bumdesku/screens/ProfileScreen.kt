@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dony.bumdesku.data.UserProfile
+import androidx.compose.material.icons.filled.HelpOutline
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -21,7 +22,8 @@ fun ProfileScreen(
     userProfile: UserProfile?,
     onNavigateUp: () -> Unit,
     onChangePasswordClick: () -> Unit,
-    onLogoutClick: () -> Unit
+    onLogoutClick: () -> Unit,
+    onNavigateToGuide: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -54,6 +56,19 @@ fun ProfileScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            OutlinedButton(
+                onClick = onNavigateToGuide,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    Icons.Default.HelpOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                )
+                Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Panduan Pengguna")
+            }
+
             // Tombol Ubah Password
             Button(
                 onClick = onChangePasswordClick,
@@ -66,9 +81,8 @@ fun ProfileScreen(
                 )
                 Spacer(modifier = Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Ubah Password")
-            } // <-- Kurung kurawal penutup untuk Button "Ubah Password" seharusnya di sini
+            }
 
-            // ✅ Tombol Logout dipindahkan ke sini
             Button(
                 onClick = onLogoutClick,
                 modifier = Modifier.fillMaxWidth(),

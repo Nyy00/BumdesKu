@@ -31,6 +31,7 @@ import com.dony.bumdesku.repository.*
 import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.util.BluetoothPrinterService
 import android.Manifest
+import com.dony.bumdesku.screens.UserGuideScreen
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import com.dony.bumdesku.features.toko.PosScreen
@@ -346,8 +347,17 @@ fun BumdesApp(
                             inclusive = true
                         }
                     }
+                },
+                // ✅ --- HUBUNGKAN TOMBOL DENGAN NAVIGASI ---
+                onNavigateToGuide = {
+                    navController.navigate("user_guide")
                 }
             )
+        }
+
+        // ✅ --- TAMBAHKAN COMPOSABLE BARU UNTUK PANDUAN ---
+        composable("user_guide") {
+            UserGuideScreen(onNavigateUp = { navController.popBackStack() })
         }
 
         composable("transaction_list") {
