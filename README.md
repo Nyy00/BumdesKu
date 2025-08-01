@@ -95,7 +95,7 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 *(Disarankan untuk menambahkan beberapa gambar tangkapan layar di sini untuk menunjukkan tampilan aplikasi Anda, seperti Halaman Utama, Layar Kasir, atau Laporan Keuangan)*
 
 | Halaman Utama | Kasir Toko | Kasir Agribisnis | Struk Digital |
-| :---: | :---: | :---: |
+| :-----------: | :--------: | :--------------: | :-----------: |
 | ![Tampilan Halaman Utama](app/screenshoot/home.png)| ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Agribisnis](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
 
 
