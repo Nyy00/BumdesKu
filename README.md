@@ -96,7 +96,7 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 | Halaman Utama | Kasir Toko | Struk Digital |
 | :---: | :---: | :---: |
-| *(Letakkan gambar Anda di sini)* | *(Letakkan gambar Anda di sini)* | *(Letakkan gambar Anda di sini)* |
+| ![Tampilan Halaman Utama](screenshoot/home.png)| ![Tampilan Kasir Toko](screenshoot/kasir1.png) ![Tampilan Kasir Toko](screenshoot/kasir2.png) |![Tampilan Struk Digital](screenshoot/struk.png) |
 
 
 ---
@@ -109,4 +109,4 @@ Kontribusi untuk pengembangan proyek ini sangat diterima. Silakan lakukan *fork*
 
 ## 📜 Lisensi
 
-Proyek ini dilisensikan di bawah Lisensi [MIT](LICENSE.md). *(Anda bisa memilih lisensi lain jika diinginkan)*
+Proyek ini dilisensikan di bawah Lisensi [MIT](LICENSE.md).
