@@ -14,6 +14,7 @@ import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import com.dony.bumdesku.repository.FixedAssetRepository
 import com.dony.bumdesku.data.FinancialHealthData
 import com.dony.bumdesku.data.HealthStatus
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,7 +41,8 @@ class AuthViewModel(
     private val accountRepository: AccountRepository,
     private val debtRepository: DebtRepository,
     private val agriRepository: AgriRepository,
-    private val agriCycleRepository: AgriCycleRepository
+    private val agriCycleRepository: AgriCycleRepository,
+    private val fixedAssetRepository: FixedAssetRepository
 ) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
@@ -88,9 +90,10 @@ class AuthViewModel(
             activeListeners.add(debtRepository.syncAllReceivablesForManager())
             activeListeners.add(agriRepository.syncAllHarvestsForManager())
             activeListeners.add(agriRepository.syncAllProduceSalesForManager())
-             activeListeners.add(agriCycleRepository.syncAllCyclesForManager())
-             activeListeners.add(agriCycleRepository.syncAllCostsForManager())
+            activeListeners.add(agriCycleRepository.syncAllCyclesForManager())
+            activeListeners.add(agriCycleRepository.syncAllCostsForManager())
             activeListeners.add(agriRepository.syncAllAgriInventoryForManager())
+            activeListeners.add(fixedAssetRepository.syncAllAssetsForManager())
         } catch (e: Exception) {
             Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
         }
@@ -122,9 +125,10 @@ class AuthViewModel(
                             activeListeners.add(debtRepository.syncReceivablesForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncHarvestsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncProduceSalesForUser(profile.managedUnitUsahaIds))
-                             activeListeners.add(agriCycleRepository.syncCyclesForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(agriCycleRepository.syncCyclesForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriCycleRepository.syncCostsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncAgriInventoryForUser(profile.managedUnitUsahaIds))
+                            activeListeners.add(fixedAssetRepository.syncAssetsForUser(profile.managedUnitUsahaIds))
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)

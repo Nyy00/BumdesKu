@@ -32,6 +32,12 @@ import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.util.BluetoothPrinterService
 import android.Manifest
 import com.dony.bumdesku.screens.UserGuideScreen
+import com.dony.bumdesku.data.FixedAssetDao
+import com.dony.bumdesku.repository.FixedAssetRepository
+import com.dony.bumdesku.viewmodel.FixedAssetViewModel
+import com.dony.bumdesku.viewmodel.FixedAssetViewModelFactory
+import com.dony.bumdesku.screens.FixedAssetListScreen
+import com.dony.bumdesku.screens.AddFixedAssetScreen
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import com.dony.bumdesku.features.toko.PosScreen
@@ -81,6 +87,7 @@ class MainActivity : ComponentActivity() {
         val saleDao = database.saleDao()
         val agriDao = database.agriDao()
         val cycleDao = database.cycleDao()
+        val fixedAssetDao = database.fixedAssetDao()
 
         val accountRepository = AccountRepository(accountDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
@@ -90,6 +97,7 @@ class MainActivity : ComponentActivity() {
         val posRepository = PosRepository(saleDao, assetRepository, transactionRepository, accountRepository)
         val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
         val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
+        val fixedAssetRepository = FixedAssetRepository(fixedAssetDao)
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
@@ -103,6 +111,7 @@ class MainActivity : ComponentActivity() {
         val agriCycleViewModelFactory = AgriCycleViewModelFactory(agriCycleRepository, accountRepository)
         val agriInventoryViewModelFactory = AgriInventoryViewModelFactory(agriRepository)
         val agriSaleDetailViewModelFactory = AgriSaleDetailViewModelFactory()
+        val fixedAssetViewModelFactory = FixedAssetViewModelFactory(fixedAssetRepository, unitUsahaRepository)
 
 
         val authViewModelFactory = AuthViewModelFactory(
@@ -113,7 +122,8 @@ class MainActivity : ComponentActivity() {
             accountRepository,
             debtRepository,
             agriRepository,
-            agriCycleRepository
+            agriCycleRepository,
+            fixedAssetRepository
         )
 
         setContent {
@@ -131,7 +141,8 @@ class MainActivity : ComponentActivity() {
                     agriCycleViewModelFactory = agriCycleViewModelFactory,
                     agriInventoryViewModelFactory = agriInventoryViewModelFactory,
                     agriSaleDetailViewModelFactory = agriSaleDetailViewModelFactory,
-                    printerService = printerService
+                    printerService = printerService,
+                    fixedAssetViewModelFactory = fixedAssetViewModelFactory
                 )
             }
         }
@@ -152,7 +163,8 @@ fun BumdesApp(
     agriCycleViewModelFactory: AgriCycleViewModelFactory,
     agriInventoryViewModelFactory: AgriInventoryViewModelFactory,
     agriSaleDetailViewModelFactory: AgriSaleDetailViewModelFactory,
-    printerService: BluetoothPrinterService
+    printerService: BluetoothPrinterService,
+    fixedAssetViewModelFactory: FixedAssetViewModelFactory
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -924,6 +936,54 @@ fun BumdesApp(
                 onSaveComplete = { navController.popBackStack() },
                 onNavigateUp = { navController.popBackStack() }
             )
+        }
+
+        composable("fixed_asset_list") {
+            val viewModel: FixedAssetViewModel = viewModel(factory = fixedAssetViewModelFactory)
+            val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
+            FixedAssetListScreen(
+                viewModel = viewModel,
+                userRole = userProfile?.role ?: "pengurus",
+                onAddAssetClick = { navController.navigate("add_fixed_asset") },
+                onItemClick = { assetId ->
+                    navController.navigate("edit_fixed_asset/$assetId")
+                },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable("add_fixed_asset") {
+            val viewModel: FixedAssetViewModel = viewModel(factory = fixedAssetViewModelFactory)
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+            AddFixedAssetScreen(
+                viewModel = viewModel,
+                userRole = authViewModel.userProfile.collectAsStateWithLifecycle().value?.role ?: "pengurus",
+                activeUnitUsaha = activeUnitUsaha,
+                onSaveComplete = { navController.popBackStack() },
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            "edit_fixed_asset/{assetId}",
+            arguments = listOf(navArgument("assetId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val assetId = backStackEntry.arguments?.getString("assetId") ?: return@composable
+            val viewModel: FixedAssetViewModel = viewModel(factory = fixedAssetViewModelFactory)
+            val assetToEdit by viewModel.getAssetById(assetId).collectAsState(initial = null)
+            val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
+
+            assetToEdit?.let {
+                AddFixedAssetScreen(
+                    assetToEdit = it,
+                    viewModel = viewModel,
+                    userRole = authViewModel.userProfile.collectAsStateWithLifecycle().value?.role
+                        ?: "pengurus",
+                    activeUnitUsaha = activeUnitUsaha,
+                    onSaveComplete = { navController.popBackStack() },
+                    onNavigateUp = { navController.popBackStack() }
+                )
+            }
         }
     }
 }

@@ -8,6 +8,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.dony.bumdesku.data.FixedAsset
+import com.dony.bumdesku.data.FixedAssetDao
 import java.util.UUID
 
 @Database(
@@ -23,9 +25,10 @@ import java.util.UUID
         ProduceSale::class,
         ProductionCycle::class,
         AgriInventory::class,
-        CycleCost::class
+        CycleCost::class,
+        FixedAsset::class
     ],
-    version = 19, // NAIKKAN VERSI DATABASE
+    version = 20, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
@@ -38,6 +41,7 @@ abstract class BumdesDatabase : RoomDatabase() {
     abstract fun saleDao(): SaleDao
     abstract fun agriDao(): AgriDao
     abstract fun cycleDao(): CycleDao
+    abstract fun fixedAssetDao(): FixedAssetDao
 
     companion object {
         @Volatile

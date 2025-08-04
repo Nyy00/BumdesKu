@@ -50,6 +50,7 @@ fun HomeScreen(
 ) {
     val baseActions = listOf(
         QuickAction("Input Jurnal", Icons.Default.AddCircleOutline, "add_transaction"),
+        QuickAction("Aset Tetap", Icons.Default.Business, "fixed_asset_list"),
         QuickAction("Buku Besar", Icons.AutoMirrored.Filled.MenuBook, "transaction_list"),
         QuickAction("Laba Rugi", Icons.Default.Assessment, "report_screen"),
         QuickAction("Aset & Stok", Icons.Default.Inventory, "asset_list"),
