@@ -94,19 +94,14 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 *(Disarankan untuk menambahkan beberapa gambar tangkapan layar di sini untuk menunjukkan tampilan aplikasi Anda, seperti Halaman Utama, Layar Kasir, atau Laporan Keuangan)*
 
-| Halaman Utama | Kasir Toko | Struk Digital |
-| :---: | :---: | :---: |
-| *(Letakkan gambar Anda di sini)* | *(Letakkan gambar Anda di sini)* | *(Letakkan gambar Anda di sini)* |
+| Halaman Utama | Kasir Toko | Kasir Agribisnis | Struk Digital |
+| :-----------: | :--------: | :--------------: | :-----------: |
+| ![Tampilan Halaman Utama](app/screenshoot/home.png)| ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Agribisnis](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
 
 
----
-
-## 🤝 Berkontribusi
-
-Kontribusi untuk pengembangan proyek ini sangat diterima. Silakan lakukan *fork* pada *repository* ini, buat *branch* baru untuk fitur Anda, dan buat *Pull Request*.
 
 ---
 
 ## 📜 Lisensi
 
-Proyek ini dilisensikan di bawah Lisensi [MIT](LICENSE.md). *(Anda bisa memilih lisensi lain jika diinginkan)*
+Proyek ini dilisensikan di bawah Lisensi [MIT](LICENSE.md).
