@@ -26,7 +26,7 @@ import java.util.UUID
         ProductionCycle::class,
         AgriInventory::class,
         CycleCost::class,
-        FixedAsset::class
+        FixedAsset::class,
     ],
     version = 20, // NAIKKAN VERSI DATABASE
     exportSchema = false
@@ -68,36 +68,10 @@ abstract class BumdesDatabase : RoomDatabase() {
             super.onCreate(db)
             INSTANCE?.let { database ->
                 scope.launch {
-                    populateDatabase(database.accountDao())
+                    val accountDao = database.accountDao()
+                    // Pre-populate data if needed
                 }
             }
-        }
-
-        suspend fun populateDatabase(accountDao: AccountDao) {
-            // Hapus data lama untuk memastikan tidak ada duplikat saat dibuat ulang
-            accountDao.deleteAll()
-            val defaultAccounts = listOf(
-                // ASET LANCAR
-                Account(id = UUID.randomUUID().toString(), accountNumber = "111", accountName = "Kas Tunai", category = AccountCategory.ASET),
-                Account(id = UUID.randomUUID().toString(), accountNumber = "112", accountName = "Bank", category = AccountCategory.ASET),
-                Account(id = UUID.randomUUID().toString(), accountNumber = "113", accountName = "Piutang Usaha", category = AccountCategory.ASET),
-                // ASET TETAP
-                Account(id = UUID.randomUUID().toString(), accountNumber = "121", accountName = "Peralatan", category = AccountCategory.ASET),
-                // KEWAJIBAN
-                Account(id = UUID.randomUUID().toString(), accountNumber = "211", accountName = "Utang Usaha", category = AccountCategory.KEWAJIBAN),
-                // MODAL
-                Account(id = UUID.randomUUID().toString(), accountNumber = "311", accountName = "Modal Disetor", category = AccountCategory.MODAL),
-                Account(id = UUID.randomUUID().toString(), accountNumber = "312", accountName = "Prive", category = AccountCategory.MODAL),
-                // PENDAPATAN
-                Account(id = UUID.randomUUID().toString(), accountNumber = "411", accountName = "Pendapatan Jasa", category = AccountCategory.PENDAPATAN),
-                Account(id = UUID.randomUUID().toString(), accountNumber = "412", accountName = "Pendapatan Sewa", category = AccountCategory.PENDAPATAN),
-                // 4. Akun baru untuk penjualan dari kasir
-                Account(id = UUID.randomUUID().toString(), accountNumber = "413", accountName = "Pendapatan Penjualan", category = AccountCategory.PENDAPATAN),
-                // BEBAN
-                Account(id = UUID.randomUUID().toString(), accountNumber = "511", accountName = "Beban Gaji", category = AccountCategory.BEBAN),
-                Account(id = UUID.randomUUID().toString(), accountNumber = "512", accountName = "Beban Listrik & Air", category = AccountCategory.BEBAN)
-            )
-            accountDao.insertAll(defaultAccounts)
         }
     }
 }
