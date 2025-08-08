@@ -1,17 +1,21 @@
 package com.dony.bumdesku.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Summarize // <-- Import ikon baru
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color // <-- Import Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dony.bumdesku.CsvExporter // <-- Import CsvExporter
 import com.dony.bumdesku.PdfExporter
 import com.dony.bumdesku.data.Account
 import com.dony.bumdesku.data.DashboardData
@@ -27,15 +31,17 @@ import java.util.*
 fun ReportScreen(
     reportData: ReportData,
     reportTransactions: List<Transaction>,
-    unitUsahaList: List<UnitUsaha>, // <-- Tambahkan parameter ini
+    unitUsahaList: List<UnitUsaha>,
     userRole: String,
     allAccounts: List<Account>,
-    onGenerateReport: (Long, Long, UnitUsaha?) -> Unit, // <-- Ubah parameter ini
+    onGenerateReport: (Long, Long, UnitUsaha?) -> Unit,
     onNavigateUp: () -> Unit
-    // onItemClick kita hapus karena tidak digunakan di sini
 ) {
     val context = LocalContext.current
     val simpleDateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+
+    // Inisialisasi CsvExporter
+    val csvExporter = CsvExporter(context)
 
     var startDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     var endDateMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -45,7 +51,6 @@ fun ReportScreen(
     val startDateState = rememberDatePickerState(initialSelectedDateMillis = startDateMillis)
     val endDateState = rememberDatePickerState(initialSelectedDateMillis = endDateMillis)
 
-    // State untuk dropdown filter
     var selectedUnitUsaha by remember { mutableStateOf<UnitUsaha?>(null) }
     var isUnitUsahaExpanded by remember { mutableStateOf(false) }
 
@@ -65,17 +70,8 @@ fun ReportScreen(
                     IconButton(onClick = onNavigateUp) {
                         Icon(Icons.Default.ArrowBack, "Kembali")
                     }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        PdfExporter.createReportPdf(context, reportData, reportTransactions, allAccounts)
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.PictureAsPdf,
-                            contentDescription = "Ekspor ke PDF"
-                        )
-                    }
                 }
+                // Tombol ekspor dipindahkan dari sini
             )
         }
     ) { paddingValues ->
@@ -109,7 +105,9 @@ fun ReportScreen(
                         readOnly = true,
                         label = { Text("Filter Unit Usaha") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isUnitUsahaExpanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
                     )
                     ExposedDropdownMenu(
                         expanded = isUnitUsahaExpanded,
@@ -138,10 +136,50 @@ fun ReportScreen(
             // Tombol Generate Laporan
             Button(
                 onClick = { onGenerateReport(startDateMillis, endDateMillis + 86400000 - 1, selectedUnitUsaha) },
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
             ) {
                 Text("Tampilkan Laporan")
             }
+
+            // ✅✅✅ PERUBAHAN ADA DI SINI: Tombol Ekspor ditambahkan di bawah ✅✅✅
+            if (reportData.isGenerated) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Tombol Ekspor PDF
+                    Button(
+                        onClick = {
+                            PdfExporter.createReportPdf(context, reportData, reportTransactions, allAccounts)
+                            Toast.makeText(context, "Berhasil diekspor ke PDF", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.PictureAsPdf, contentDescription = "PDF")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("PDF")
+                    }
+
+                    // Tombol Ekspor Excel (CSV)
+                    Button(
+                        onClick = {
+                            csvExporter.exportLaporanKeuanganToCsv(reportData, reportTransactions, Date(startDateMillis), Date(endDateMillis))
+                            Toast.makeText(context, "Berhasil diekspor ke folder Downloads", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D6F42)) // Warna hijau Excel
+                    ) {
+                        Icon(imageVector = Icons.Default.Summarize, contentDescription = "Excel")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Excel (CSV)")
+                    }
+                }
+            }
+
 
             Spacer(modifier = Modifier.height(8.dp))
             Divider()

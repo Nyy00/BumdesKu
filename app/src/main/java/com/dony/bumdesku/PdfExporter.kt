@@ -22,6 +22,15 @@ import java.util.*
 
 object PdfExporter {
 
+    private const val PAGE_WIDTH = 792
+    private const val PAGE_HEIGHT = 1120
+    private const val MARGIN = 40f
+    private var yPosition = 0f
+    private lateinit var canvas: Canvas
+    private lateinit var pdfDocument: PdfDocument
+    private var currentPage: PdfDocument.Page? = null
+    private var pageNumber = 1
+
     fun createReportPdf(
         context: Context,
         reportData: ReportData,
@@ -33,91 +42,97 @@ object PdfExporter {
             return
         }
 
-        val pageHeight = 1120
-        val pagewidth = 792
+        // Inisialisasi dokumen dan halaman pertama
+        pdfDocument = PdfDocument()
+        startNewPage()
 
-        val pdfDocument = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(pagewidth, pageHeight, 1).create()
-        val page = pdfDocument.startPage(pageInfo)
-        val canvas: Canvas = page.canvas
-
-        val titlePaint = Paint().apply {
-            color = Color.BLACK
-            textSize = 20f
-            isFakeBoldText = true
-        }
-
-        val subtitlePaint = Paint().apply {
-            color = Color.DKGRAY
-            textSize = 16f
-        }
-
-        val headerPaint = Paint().apply {
-            color = Color.BLACK
-            textSize = 15f
-            isFakeBoldText = true
-        }
-
-        val textPaint = Paint().apply {
-            color = Color.DKGRAY
-            textSize = 14f
-        }
-
-        var yPosition = 60f
+        val titlePaint = Paint().apply { color = Color.BLACK; textSize = 20f; isFakeBoldText = true }
+        val subtitlePaint = Paint().apply { color = Color.DKGRAY; textSize = 16f }
+        val headerPaint = Paint().apply { color = Color.BLACK; textSize = 15f; isFakeBoldText = true }
+        val textPaint = Paint().apply { color = Color.DKGRAY; textSize = 14f }
         val localeID = Locale("in", "ID")
 
-        canvas.drawText("Laporan Keuangan BUMDes", 40f, yPosition, titlePaint)
+        // --- Menggambar Header Laporan ---
+        yPosition = MARGIN + 20f
+        drawText("Laporan Keuangan BUMDes", MARGIN, yPosition, titlePaint)
         yPosition += 25f
-        canvas.drawText(reportData.unitUsahaName, 40f, yPosition, subtitlePaint)
+        drawText(reportData.unitUsahaName, MARGIN, yPosition, subtitlePaint)
         yPosition += 15f
         val dateFormatPeriod = SimpleDateFormat("dd MMM yyyy", localeID)
         val periodText = "${dateFormatPeriod.format(Date(reportData.startDate))} - ${dateFormatPeriod.format(Date(reportData.endDate))}"
-        canvas.drawText(periodText, 40f, yPosition, textPaint)
+        drawText(periodText, MARGIN, yPosition, textPaint)
         yPosition += 40f
 
+        // --- Menggambar Ringkasan Keuangan ---
         val currencyFormat = NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 0 }
-        canvas.drawText("Total Pendapatan: ${currencyFormat.format(reportData.totalIncome)}", 40f, yPosition, textPaint)
+        drawText("Total Pendapatan: ${currencyFormat.format(reportData.totalIncome)}", MARGIN, yPosition, textPaint)
         yPosition += 25f
-        canvas.drawText("Total Beban: ${currencyFormat.format(reportData.totalExpenses)}", 40f, yPosition, textPaint)
+        drawText("Total Beban: ${currencyFormat.format(reportData.totalExpenses)}", MARGIN, yPosition, textPaint)
         yPosition += 25f
-        canvas.drawText("Laba Bersih: ${currencyFormat.format(reportData.netProfit)}", 40f, yPosition, headerPaint)
+        drawText("Laba Bersih: ${currencyFormat.format(reportData.netProfit)}", MARGIN, yPosition, headerPaint)
         yPosition += 50f
 
-        canvas.drawText("Tgl", 40f, yPosition, headerPaint)
-        canvas.drawText("Deskripsi", 120f, yPosition, headerPaint)
-        canvas.drawText("Pemasukan", 450f, yPosition, headerPaint)
-        canvas.drawText("Pengeluaran", 600f, yPosition, headerPaint)
+        // --- Menggambar Header Tabel Transaksi ---
+        checkPageOverflow(50f) // Cek apakah header tabel muat
+        drawText("Tgl", MARGIN, yPosition, headerPaint)
+        drawText("Deskripsi", 120f, yPosition, headerPaint)
+        drawText("Pemasukan", 450f, yPosition, headerPaint)
+        drawText("Pengeluaran", 600f, yPosition, headerPaint)
         yPosition += 10f
-
-        canvas.drawLine(40f, yPosition, pagewidth - 40f, yPosition, headerPaint)
+        canvas.drawLine(MARGIN, yPosition, PAGE_WIDTH - MARGIN, yPosition, headerPaint)
         yPosition += 20f
 
-        // [PERBAIKAN] Logika tabel yang lebih akurat
+        // --- Menggambar Data Transaksi (Looping) ---
         val dateFormatTable = SimpleDateFormat("dd-MM-yy", localeID)
         val pendapatanAccountIds = allAccounts.filter { it.category == AccountCategory.PENDAPATAN }.map { it.id }
         val bebanAccountIds = allAccounts.filter { it.category == AccountCategory.BEBAN }.map { it.id }
 
         for (tx in transactions) {
-            // Hanya tampilkan transaksi yang relevan dengan laporan laba rugi
             val isIncome = tx.creditAccountId in pendapatanAccountIds
             val isExpense = tx.debitAccountId in bebanAccountIds
 
             if (isIncome || isExpense) {
-                canvas.drawText(dateFormatTable.format(Date(tx.date)), 40f, yPosition, textPaint)
-                canvas.drawText(tx.description, 120f, yPosition, textPaint)
+
+                checkPageOverflow(25f) // Perkirakan tinggi satu baris adalah 25f
+
+                drawText(dateFormatTable.format(Date(tx.date)), MARGIN, yPosition, textPaint)
+                drawText(tx.description, 120f, yPosition, textPaint)
 
                 if (isIncome) {
-                    canvas.drawText(currencyFormat.format(tx.amount), 450f, yPosition, textPaint)
+                    drawText(currencyFormat.format(tx.amount), 450f, yPosition, textPaint)
                 }
                 if (isExpense) {
-                    canvas.drawText(currencyFormat.format(tx.amount), 600f, yPosition, textPaint)
+                    drawText(currencyFormat.format(tx.amount), 600f, yPosition, textPaint)
                 }
                 yPosition += 25f
             }
         }
 
-        pdfDocument.finishPage(page)
+        // Selesaikan halaman terakhir dan simpan file
+        pdfDocument.finishPage(currentPage)
         savePdfToFile(context, pdfDocument)
+    }
+
+    private fun startNewPage() {
+        if (currentPage != null) {
+            pdfDocument.finishPage(currentPage)
+        }
+        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+        currentPage = pdfDocument.startPage(pageInfo)
+        canvas = currentPage!!.canvas
+        yPosition = MARGIN
+        pageNumber++
+    }
+
+    private fun checkPageOverflow(neededSpace: Float) {
+        if (yPosition + neededSpace > PAGE_HEIGHT - MARGIN) {
+            startNewPage()
+        }
+    }
+
+    // Fungsi drawText sederhana untuk menghindari repetisi
+    private fun drawText(text: String, x: Float, y: Float, paint: Paint) {
+        canvas.drawText(text, x, y, paint)
     }
 
     private fun savePdfToFile(context: Context, pdfDocument: PdfDocument) {
