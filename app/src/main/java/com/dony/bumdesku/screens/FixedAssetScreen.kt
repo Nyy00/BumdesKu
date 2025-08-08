@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.viewmodel.*
 import com.dony.bumdesku.data.FixedAsset
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
@@ -36,14 +37,12 @@ fun FixedAssetListScreen(
     userRole: String,
     onAddAssetClick: () -> Unit,
     onItemClick: (String) -> Unit,
-    onNavigateUp: () -> Unit
+    onNavigateUp: () -> Unit,
 ) {
     val assets by viewModel.filteredAssets.collectAsStateWithLifecycle()
     val allUnitUsaha by viewModel.allUnitUsaha.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedUnit by viewModel.selectedUnitFilter.collectAsStateWithLifecycle()
     var assetToDelete by remember { mutableStateOf<FixedAsset?>(null) }
-
-    // ✅ --- LaunchedEffect yang salah sudah dihapus dari sini ---
 
     Scaffold(
         topBar = {
@@ -109,8 +108,10 @@ fun FixedAssetListScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(assets, key = { it.id }) { asset ->
+                        val currentBookValue = viewModel.calculateCurrentBookValue(asset)
                         FixedAssetItem(
                             asset = asset,
+                            currentBookValue = currentBookValue, // Kirim hasilnya ke Composable
                             onItemClick = { onItemClick(asset.id) },
                             onDeleteClick = { assetToDelete = asset },
                             userRole = userRole
@@ -146,6 +147,7 @@ fun FixedAssetListScreen(
 @Composable
 fun FixedAssetItem(
     asset: FixedAsset,
+    currentBookValue: Double, // Tambahkan parameter ini
     userRole: String,
     onItemClick: () -> Unit,
     onDeleteClick: () -> Unit
@@ -177,9 +179,10 @@ fun FixedAssetItem(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    "Nilai Buku: ${currencyFormat.format(asset.bookValue)}",
+                    "Nilai Buku Saat Ini: ${currencyFormat.format(currentBookValue)}", // Gunakan nilai yang sudah dihitung
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary // Beri warna berbeda agar menonjol
                 )
             }
             if (userRole != "auditor") {
@@ -190,6 +193,7 @@ fun FixedAssetItem(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -208,6 +212,7 @@ fun AddFixedAssetScreen(
     var description by remember { mutableStateOf(assetToEdit?.description ?: "") }
     var purchasePrice by remember { mutableStateOf(assetToEdit?.purchasePrice?.toLong()?.toString() ?: "") }
     var usefulLife by remember { mutableStateOf(assetToEdit?.usefulLife?.toString() ?: "") }
+    var residualValue by remember { mutableStateOf(assetToEdit?.residualValue?.toLong()?.toString() ?: "") }
     val dateState = rememberDatePickerState(initialSelectedDateMillis = assetToEdit?.purchaseDate ?: System.currentTimeMillis())
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -293,6 +298,12 @@ fun AddFixedAssetScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            OutlinedTextField(
+                value = residualValue, onValueChange = { newValue -> residualValue = newValue.filter { it.isDigit() } },
+                label = { Text("Nilai Residu / Sisa (Opsional)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                visualTransformation = ThousandSeparatorVisualTransformation(), modifier = Modifier.fillMaxWidth()
+            )
+
             Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
                 val selectedDate = dateState.selectedDateMillis?.let {
                     SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(it))
@@ -306,6 +317,9 @@ fun AddFixedAssetScreen(
                 onClick = {
                     val priceDouble = purchasePrice.toDoubleOrNull()
                     val lifeInt = usefulLife.toIntOrNull()
+                    // --- TAMBAHKAN LOGIKA INI ---
+                    val residualDouble = residualValue.toDoubleOrNull() ?: 0.0 // Default 0 jika kosong
+                    // -----------------------------
                     val dateLong = dateState.selectedDateMillis
                     val unitId = selectedUnitUsaha?.id
 
@@ -317,11 +331,11 @@ fun AddFixedAssetScreen(
                             usefulLife = lifeInt,
                             purchaseDate = dateLong,
                             unitUsahaId = unitId,
-                            bookValue = assetToEdit?.bookValue ?: priceDouble // Set nilai buku awal
+                            residualValue = residualDouble, // <-- Simpan nilai residu
+                            bookValue = assetToEdit?.bookValue ?: priceDouble
                         )
                         if (isEditMode) {
                             viewModel.update(assetData)
-                            // ✅ --- Panggil onSaveComplete() di sini untuk mode edit ---
                             onSaveComplete()
                         } else {
                             viewModel.insert(assetData)

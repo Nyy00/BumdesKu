@@ -18,6 +18,8 @@ data class FixedAsset(
     var bookValue: Double = 0.0,
     // Properti untuk masa manfaat (dalam tahun), untuk penyusutan di masa depan
     val usefulLife: Int = 0,
+    val residualValue: Double = 0.0, // Nilai sisa aset di akhir masa manfaat
+
     @get:PropertyName("isSold") @set:PropertyName("isSold")
     var isSold: Boolean = false
 )

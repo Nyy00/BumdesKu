@@ -35,6 +35,27 @@ class FixedAssetViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
 
+    fun calculateCurrentBookValue(asset: FixedAsset): Double {
+        if (asset.usefulLife <= 0) {
+            return asset.purchasePrice
+        }
+        val depreciableCost = asset.purchasePrice - asset.residualValue
+        if (depreciableCost <= 0) {
+            return asset.purchasePrice
+        }
+        val annualDepreciation = depreciableCost / asset.usefulLife
+        val yearsInMillis = 1000L * 60 * 60 * 24 * 365
+        val yearsPassed = (System.currentTimeMillis() - asset.purchaseDate) / yearsInMillis.toDouble()
+        val accumulatedDepreciation = annualDepreciation * yearsPassed
+        var currentBookValue = asset.purchasePrice - accumulatedDepreciation
+        if (currentBookValue < asset.residualValue) {
+            currentBookValue = asset.residualValue
+        }
+
+        return currentBookValue
+    }
+
+
     fun selectUnitFilter(unitUsaha: UnitUsaha?) {
         _selectedUnitFilter.value = unitUsaha
     }
@@ -68,7 +89,7 @@ class FixedAssetViewModel(
     }
 }
 
-// ... (Factory tidak berubah)
+
 class FixedAssetViewModelFactory(
     private val fixedAssetRepository: FixedAssetRepository,
     private val unitUsahaRepository: UnitUsahaRepository

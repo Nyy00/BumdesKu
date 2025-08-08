@@ -28,7 +28,7 @@ import java.util.UUID
         CycleCost::class,
         FixedAsset::class,
     ],
-    version = 20, // NAIKKAN VERSI DATABASE
+    version = 21, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
