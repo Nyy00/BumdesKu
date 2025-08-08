@@ -74,8 +74,12 @@ class AgriCycleRepository(
         firestore.collection("production_cycles").document(cycle.id).set(cycle).await()
     }
 
-    suspend fun finishCycle(cycle: ProductionCycle, totalHarvest: Double) {
+// Temukan fungsi ini di dalam AgriCycleRepository.kt
+
+    // Ganti fungsi lama dengan yang ini
+    suspend fun finishCycle(cycle: ProductionCycle) {
         if (cycle.id.isBlank() || cycle.status == CycleStatus.SELESAI) return
+        val totalHarvest = getTotalHarvestsByCycleId(cycle.id)
         val hpp = if (totalHarvest > 0) cycle.totalCost / totalHarvest else 0.0
         val finishedCycle = cycle.copy(
             status = CycleStatus.SELESAI,
@@ -156,5 +160,39 @@ class AgriCycleRepository(
         if (cycle.id.isBlank()) return
         val updatedCycle = cycle.copy(isArchived = true)
         updateCycle(updatedCycle)
+    }
+
+    // --- FUNGSI BARU UNTUK HPP ---
+    /**
+     * Menghitung total biaya dari sub-koleksi 'cycle_costs'.
+     */
+    suspend fun getTotalCostByCycleId(cycleId: String): Double {
+        var totalCost = 0.0
+        try {
+            val cycleRef = firestore.collection("production_cycles").document(cycleId)
+            val snapshot = cycleRef.get().await()
+            totalCost = snapshot.getDouble("totalCost") ?: 0.0
+        } catch (e: Exception) {
+            Log.e("AgriCycleRepo", "Gagal mengambil total biaya: ${e.message}")
+        }
+        return totalCost
+    }
+
+    /**
+     * Menghitung total panen yang sudah tercatat dari sub-koleksi 'harvests'.
+     */
+    suspend fun getTotalHarvestsByCycleId(cycleId: String): Double {
+        var totalHarvest = 0.0
+        try {
+            // Asumsi ada koleksi 'harvests' di dalam dokumen siklus
+            val snapshot = firestore.collection("production_cycles").document(cycleId)
+                .collection("harvests").get().await()
+            for(document in snapshot.documents){
+                totalHarvest += document.getDouble("quantity") ?: 0.0
+            }
+        } catch (e: Exception) {
+            Log.e("AgriCycleRepo", "Gagal mengambil total panen: ${e.message}")
+        }
+        return totalHarvest
     }
 }

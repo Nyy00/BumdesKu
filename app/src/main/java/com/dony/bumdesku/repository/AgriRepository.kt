@@ -4,6 +4,7 @@ import android.util.Log
 import com.dony.bumdesku.data.*
 import com.dony.bumdesku.features.agribisnis.AgriCartItem
 import com.google.firebase.auth.ktx.auth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -224,6 +225,60 @@ class AgriRepository(
             } ?: emptyList()
             deleteAll()
             insertAll(firestoreData)
+        }
+    }
+
+    suspend fun addHarvestToCycle(harvest: Harvest, cycleId: String) {
+        // Langkah 1: Simpan catatan panen terperinci ke sub-koleksi siklus (logika saat ini)
+        val harvestDocRef = firestore.collection("production_cycles").document(cycleId)
+            .collection("harvests").document()
+        val newHarvest = harvest.copy(id = harvestDocRef.id)
+        harvestDocRef.set(newHarvest).await()
+
+        // Langkah 2: Perbarui jumlah total panen di dokumen siklus induk
+        firestore.runTransaction { transaction ->
+            val cycleRef = firestore.collection("production_cycles").document(cycleId)
+            val cycleSnapshot = transaction.get(cycleRef)
+            val currentTotalHarvest = cycleSnapshot.getDouble("totalHarvest") ?: 0.0
+            val newTotalHarvest = currentTotalHarvest + harvest.quantity
+            transaction.update(cycleRef, "totalHarvest", newTotalHarvest)
+        }.await()
+
+        // Langkah 3: LOGIKA BARU - Tambahkan jumlah yang dipanen ke stok penjualan utama
+        updateMainHarvestStock(harvest)
+    }
+
+    private suspend fun updateMainHarvestStock(harvestToAdd: Harvest) {
+        val stockCollection = firestore.collection("harvests")
+
+        val querySnapshot = stockCollection
+            .whereEqualTo("name", harvestToAdd.name)
+            .whereEqualTo("unit", harvestToAdd.unit)
+            .whereEqualTo("unitUsahaId", harvestToAdd.unitUsahaId)
+            .limit(1)
+            .get()
+            .await()
+
+        if (querySnapshot.isEmpty) {
+            Log.d("AgriRepository", "Stok untuk ${harvestToAdd.name} tidak ditemukan. Membuat baru.")
+            insert(harvestToAdd)
+        } else {
+            val existingDoc = querySnapshot.documents.first()
+            val existingHarvest = existingDoc.toObject(Harvest::class.java)
+
+            if (existingHarvest != null) {
+                Log.d("AgriRepository", "Stok untuk ${existingHarvest.name} ditemukan. Memperbarui kuantitas dan harga.")
+                val stockRef = stockCollection.document(existingDoc.id)
+
+                // ✅✅✅ PERBAIKAN FINAL DAN PALING AMAN ADA DI SINI ✅✅✅
+                // Menggabungkan pembaruan kuantitas dan harga menjadi SATU perintah
+                val updates = mapOf(
+                    "quantity" to FieldValue.increment(harvestToAdd.quantity),
+                    "sellingPrice" to harvestToAdd.sellingPrice
+                )
+
+                stockRef.update(updates).await()
+            }
         }
     }
 }

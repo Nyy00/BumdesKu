@@ -81,27 +81,57 @@ fun ProductionCycleListScreen(
 fun CycleItemCard(cycle: ProductionCycle, onClick: () -> Unit) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
     val currencyFormat = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply { maximumFractionDigits = 0 }
-    val statusColor = if (cycle.status == CycleStatus.BERJALAN) Color(0xFF008800) else Color.Gray
+    val statusColor = if (cycle.status == CycleStatus.BERJALAN) Color(0xFF2E7D32) else Color.Gray
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(cycle.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            // ✅✅✅ PERUBAHAN DIMULAI DARI SINI ✅✅✅
+
+            // Menampilkan informasi tanggal
             Text("Dimulai: ${dateFormat.format(Date(cycle.startDate))}", style = MaterialTheme.typography.bodySmall)
+            if (cycle.status == CycleStatus.SELESAI && cycle.endDate != null) {
+                Text("Selesai: ${dateFormat.format(Date(cycle.endDate!!))}", style = MaterialTheme.typography.bodySmall)
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
+
+            // Menampilkan informasi biaya
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Total Biaya:", style = MaterialTheme.typography.bodyMedium)
                 Text(currencyFormat.format(cycle.totalCost), fontWeight = FontWeight.SemiBold)
             }
+
+            // Menampilkan total panen HANYA jika siklus sudah selesai
+            if (cycle.status == CycleStatus.SELESAI) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total Panen:", style = MaterialTheme.typography.bodyMedium)
+                    // Menampilkan angka desimal jika ada, dan menghilangkan .0 jika tidak perlu
+                    val formattedHarvest = if (cycle.totalHarvest % 1 == 0.0) {
+                        cycle.totalHarvest.toLong().toString()
+                    } else {
+                        String.format("%.2f", cycle.totalHarvest)
+                    }
+                    Text("$formattedHarvest Kg", fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            // Menampilkan status
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Status:", style = MaterialTheme.typography.bodyMedium)
                 Text(cycle.status.name, fontWeight = FontWeight.SemiBold, color = statusColor)
             }
+            // ✅✅✅ PERUBAHAN SELESAI DI SINI ✅✅✅
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -182,8 +212,8 @@ fun CycleDetailScreen(
                 cycle?.let {
                     CycleDetailHeader(
                         cycle = it,
-                        onFinishCycle = { totalHarvest ->
-                            viewModel.finishProductionCycle(it, totalHarvest)
+                        onFinishCycle = {
+                            viewModel.finishProductionCycle(it)
                         }
                     )
                 }
@@ -228,7 +258,7 @@ fun CycleDetailScreen(
 @Composable
 fun CycleDetailHeader(
     cycle: ProductionCycle,
-    onFinishCycle: (totalHarvest: Double) -> Unit
+    onFinishCycle: () -> Unit
 ) {
     var showFinishDialog by remember { mutableStateOf(false) }
 
@@ -237,17 +267,19 @@ fun CycleDetailHeader(
     if (cycle.status == CycleStatus.BERJALAN) {
         Button(
             onClick = { showFinishDialog = true },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
         ) {
             Text("Selesaikan Siklus & Hitung HPP")
         }
     }
 
     if (showFinishDialog) {
-        FinishCycleDialog(
+        FinishCycleConfirmationDialog(
             onDismiss = { showFinishDialog = false },
-            onConfirm = { totalHarvest ->
-                onFinishCycle(totalHarvest)
+            onConfirm = {
+                onFinishCycle()
                 showFinishDialog = false
             }
         )
@@ -293,7 +325,6 @@ fun AddCostDialog(
     var selectedCostAccount by remember { mutableStateOf<Account?>(null) }
     var isCostExpanded by remember { mutableStateOf(false) }
 
-    // [PERBAIKAN 1] Ambil daftar akun pembayaran dari ViewModel
     val paymentAccounts by viewModel.paymentAccounts.collectAsStateWithLifecycle()
     var selectedPaymentAccount by remember { mutableStateOf<Account?>(null) }
     var isPaymentExpanded by remember { mutableStateOf(false) }
@@ -307,7 +338,7 @@ fun AddCostDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Keterangan Biaya (cth: Beli Pupuk)") }
+                    label = { Text("Keterangan Biaya (cth: Beli Pupuk NPK)") }
                 )
                 OutlinedTextField(
                     value = amount,
@@ -330,7 +361,6 @@ fun AddCostDialog(
                     }
                 }
 
-                // [PERBAIKAN 2] Gunakan `paymentAccounts` yang sudah berisi objek lengkap
                 ExposedDropdownMenuBox(expanded = isPaymentExpanded, onExpandedChange = { isPaymentExpanded = !isPaymentExpanded }) {
                     OutlinedTextField(
                         value = selectedPaymentAccount?.accountName ?: "Bayar Dari Akun Mana?",
@@ -349,7 +379,6 @@ fun AddCostDialog(
         confirmButton = {
             Button(onClick = {
                 val amountDouble = amount.toDoubleOrNull()
-                // [PERBAIKAN 3] Pastikan `selectedPaymentAccount` tidak null
                 if (description.isNotBlank() && amountDouble != null && selectedCostAccount != null && selectedPaymentAccount != null) {
                     viewModel.addCostToCycle(cycle.id, cycle.unitUsahaId, description, amountDouble, selectedCostAccount!!, selectedPaymentAccount!!)
                     onDismiss()
@@ -363,37 +392,22 @@ fun AddCostDialog(
 }
 
 @Composable
-fun FinishCycleDialog(
+fun FinishCycleConfirmationDialog(
     onDismiss: () -> Unit,
-    onConfirm: (Double) -> Unit
+    onConfirm: () -> Unit
 ) {
-    var totalHarvest by remember { mutableStateOf("") }
-    val context = LocalContext.current
-
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Selesaikan Siklus") },
-        text = {
-            Column {
-                Text("Masukkan total hasil panen (dalam satuan yang sama, cth: Kg) untuk menghitung HPP per unit.")
-                OutlinedTextField(
-                    value = totalHarvest,
-                    onValueChange = { totalHarvest = it },
-                    label = { Text("Total Hasil Panen (cth: 1500)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-            }
-        },
+        title = { Text("Konfirmasi") },
+        text = { Text("Apakah Anda yakin ingin menyelesaikan siklus ini? Total hasil panen akan dihitung secara otomatis. Tindakan ini tidak dapat dibatalkan.") },
         confirmButton = {
-            Button(onClick = {
-                val harvestDouble = totalHarvest.toDoubleOrNull()
-                if (harvestDouble != null && harvestDouble > 0) {
-                    onConfirm(harvestDouble)
-                } else {
-                    Toast.makeText(context, "Harap isi total panen dengan benar.", Toast.LENGTH_SHORT).show()
-                }
-            }) { Text("Selesaikan") }
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) { Text("Ya, Selesaikan") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal") } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
     )
 }

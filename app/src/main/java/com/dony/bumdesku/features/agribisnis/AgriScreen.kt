@@ -36,7 +36,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- Layar Daftar Stok Hasil Panen ---
+// --- HarvestListScreen dan HarvestItem (TIDAK ADA PERUBAHAN) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HarvestListScreen(
@@ -84,6 +84,7 @@ fun HarvestListScreen(
         }
     }
 }
+
 @Composable
 fun HarvestItem(harvest: Harvest) {
     val localeID = Locale("in", "ID")
@@ -120,57 +121,55 @@ fun HarvestItem(harvest: Harvest) {
     }
 }
 
-// --- Layar untuk Menambah Catatan Panen Baru (UPDATED) ---
+// --- Layar untuk Menambah Catatan Panen Baru (DIROMBAK TOTAL) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddHarvestScreen(
     viewModel: AgriViewModel,
-    cycleViewModel: AgriCycleViewModel, // <-- Parameter baru
+    cycleViewModel: AgriCycleViewModel,
     userRole: String,
     activeUnitUsaha: UnitUsaha?,
     onSaveComplete: () -> Unit,
     onNavigateUp: () -> Unit
 ) {
     val context = LocalContext.current
-    var name by remember { mutableStateOf("") }
+    val localeID = Locale("in", "ID")
+    val currencyFormat = remember { NumberFormat.getCurrencyInstance(localeID).apply { maximumFractionDigits = 2 } }
+
     var quantity by remember { mutableStateOf("") }
-    var unit by remember { mutableStateOf("Kg") }
-    var costPrice by remember { mutableStateOf("") }
     var sellingPrice by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     val dateState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
 
-    // State untuk dropdown siklus
-    val completedCycles by cycleViewModel.productionCycles
-        .map { it.filter { cycle -> cycle.status == CycleStatus.SELESAI && !cycle.isArchived } }
+    val activeCycles by cycleViewModel.productionCycles
+        .map { it.filter { cycle -> cycle.status == CycleStatus.BERJALAN } }
         .collectAsStateWithLifecycle(initialValue = emptyList())
     var selectedCycle by remember { mutableStateOf<ProductionCycle?>(null) }
     var isCycleExpanded by remember { mutableStateOf(false) }
 
-    // Saat pengguna memilih siklus, otomatis isi nama dan modalnya
-    LaunchedEffect(selectedCycle) {
-        selectedCycle?.let { cycle ->
-            name = cycle.name
-            costPrice = cycle.hppPerUnit.toLong().toString()
-            // Mengisi otomatis jumlah panen dari data siklus
-            quantity = if (cycle.totalHarvest % 1 == 0.0) {
-                // Jika angka bulat, hilangkan .0
-                cycle.totalHarvest.toLong().toString()
-            } else {
-                cycle.totalHarvest.toString()
-            }
+    val totalBiaya by cycleViewModel.totalBiayaSiklus.collectAsStateWithLifecycle()
+    val totalPanenSebelumnya by cycleViewModel.totalPanenSebelumnya.collectAsStateWithLifecycle()
+    val hpp by cycleViewModel.hppSementara.collectAsStateWithLifecycle()
+
+    // ✅✅✅ PERBAIKAN UTAMA ADA DI SINI ✅✅✅
+    // LaunchedEffect ini sekarang memiliki dua 'key'.
+    // Akan berjalan saat layar pertama kali dibuka (activeUnitUsaha)
+    // DAN setiap kali pengguna memilih siklus baru (selectedCycle).
+    LaunchedEffect(activeUnitUsaha, selectedCycle) {
+        // 1. Pastikan ViewModel tahu unit usaha mana yang aktif
+        activeUnitUsaha?.id?.let { cycleViewModel.setActiveUnit(it) }
+
+        // 2. Jika siklus sudah dipilih, panggil fungsi untuk mengambil data HPP
+        selectedCycle?.id?.let {
+            cycleViewModel.getHppInitialData(it)
         }
     }
 
-    // Pastikan ViewModel mengambil data untuk unit usaha yang aktif
-    LaunchedEffect(activeUnitUsaha) {
-        activeUnitUsaha?.id?.let { cycleViewModel.setActiveUnit(it) }
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Catat Panen Baru") },
+                title = { Text("Catat Hasil Panen") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(Icons.Default.ArrowBack, "Kembali")
@@ -187,16 +186,15 @@ fun AddHarvestScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Dropdown untuk memilih siklus yang sudah selesai
             ExposedDropdownMenuBox(
                 expanded = isCycleExpanded,
                 onExpandedChange = { isCycleExpanded = !isCycleExpanded }
             ) {
                 OutlinedTextField(
-                    value = selectedCycle?.name ?: "Pilih dari Siklus Selesai (Opsional)",
+                    value = selectedCycle?.name ?: "Pilih Siklus Tanam",
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Ambil Data dari Siklus") },
+                    label = { Text("Pilih dari Siklus Aktif") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCycleExpanded) },
                     modifier = Modifier.fillMaxWidth().menuAnchor()
                 )
@@ -204,7 +202,7 @@ fun AddHarvestScreen(
                     expanded = isCycleExpanded,
                     onDismissRequest = { isCycleExpanded = false }
                 ) {
-                    completedCycles.forEach { cycle ->
+                    activeCycles.forEach { cycle ->
                         DropdownMenuItem(
                             text = { Text(cycle.name) },
                             onClick = {
@@ -216,93 +214,86 @@ fun AddHarvestScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Nama Hasil Panen (cth: Padi, Jagung)") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = selectedCycle != null // Kunci input jika siklus dipilih
-            )
-
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (selectedCycle != null) {
                 OutlinedTextField(
                     value = quantity,
-                    onValueChange = { quantity = it },
-                    label = { Text("Jumlah Panen") },
-                    modifier = Modifier.weight(1f),
+                    onValueChange = {
+                        quantity = it
+                        cycleViewModel.calculateHpp(it)
+                    },
+                    label = { Text("Jumlah Panen Hari Ini (Kg)") },
+                    modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                OutlinedTextField(
-                    value = unit,
-                    onValueChange = { unit = it },
-                    label = { Text("Satuan") },
-                    modifier = Modifier.width(120.dp)
-                )
-            }
 
-            OutlinedTextField(
-                value = costPrice,
-                onValueChange = { newValue -> costPrice = newValue.filter { it.isDigit() } },
-                label = { Text("Modal per Satuan (HPP)") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                visualTransformation = ThousandSeparatorVisualTransformation(),
-                readOnly = selectedCycle != null // Kunci input jika siklus dipilih
-            )
-
-            OutlinedTextField(
-                value = sellingPrice,
-                onValueChange = { newValue -> sellingPrice = newValue.filter { it.isDigit() } },
-                label = { Text("Harga Jual per Satuan") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                visualTransformation = ThousandSeparatorVisualTransformation()
-            )
-
-            Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                val selectedDate = dateState.selectedDateMillis?.let {
-                    SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(it))
-                } ?: "Pilih Tanggal Panen"
-                Text(selectedDate)
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            Button(
-                onClick = {
-                    val quantityDouble = quantity.toDoubleOrNull()
-                    val costPriceDouble = costPrice.toDoubleOrNull() ?: 0.0
-                    val sellingPriceDouble = sellingPrice.toDoubleOrNull()
-                    val harvestDate = dateState.selectedDateMillis
-                    val unitUsahaId = activeUnitUsaha?.id
-
-                    if (name.isNotBlank() && quantityDouble != null && sellingPriceDouble != null && harvestDate != null && unitUsahaId != null) {
-                        val newHarvest = Harvest(
-                            name = name,
-                            quantity = quantityDouble,
-                            unit = unit,
-                            costPrice = costPriceDouble,
-                            sellingPrice = sellingPriceDouble,
-                            harvestDate = harvestDate,
-                            unitUsahaId = unitUsahaId
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Kalkulasi Harga Pokok Produksi (HPP)", style = MaterialTheme.typography.titleSmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        InfoRow("Total Biaya Terkumpul:", currencyFormat.format(totalBiaya))
+                        InfoRow("Total Panen Sebelumnya:", "$totalPanenSebelumnya Kg")
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        InfoRow(
+                            label = "Estimasi HPP Saat Ini:",
+                            value = "${currencyFormat.format(hpp)} / Kg",
+                            isBold = true
                         )
-                        viewModel.insert(newHarvest)
-
-                        // Arsipkan siklus jika dipilih
-                        selectedCycle?.let { cycleToArchive ->
-                            // cycleViewModel.archiveCycle(cycleToArchive) // This function needs to be added to AgriCycleViewModel
-                        }
-
-                        Toast.makeText(context, "Data panen berhasil disimpan", Toast.LENGTH_SHORT).show()
-                        onSaveComplete()
-                    } else {
-                        Toast.makeText(context, "Harap isi semua kolom dengan benar.", Toast.LENGTH_SHORT).show()
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Simpan Data Panen")
+                }
+
+                OutlinedTextField(
+                    value = sellingPrice,
+                    onValueChange = { newValue -> sellingPrice = newValue.filter { it.isDigit() } },
+                    label = { Text("Harga Jual per Kg") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
+                    placeholder = { Text("Disarankan > ${currencyFormat.format(hpp)}") }
+                )
+
+                Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    val selectedDate = dateState.selectedDateMillis?.let {
+                        SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(it))
+                    } ?: "Pilih Tanggal Panen"
+                    Text(selectedDate)
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Button(
+                    onClick = {
+                        val quantityDouble = quantity.toDoubleOrNull()
+                        val sellingPriceDouble = sellingPrice.toDoubleOrNull()
+                        val harvestDate = dateState.selectedDateMillis
+                        val cycleId = selectedCycle?.id
+                        val unitUsahaId = activeUnitUsaha?.id
+
+                        if (selectedCycle != null && quantityDouble != null && quantityDouble > 0 && sellingPriceDouble != null && harvestDate != null && cycleId != null && unitUsahaId != null) {
+                            val newHarvest = Harvest(
+                                name = selectedCycle!!.name,
+                                quantity = quantityDouble,
+                                unit = "Kg",
+                                costPrice = hpp,
+                                sellingPrice = sellingPriceDouble,
+                                harvestDate = harvestDate,
+                                unitUsahaId = unitUsahaId
+                            )
+                            viewModel.insertPanenToCycle(newHarvest, cycleId)
+
+                            Toast.makeText(context, "Data panen berhasil disimpan", Toast.LENGTH_SHORT).show()
+                            onSaveComplete()
+                        } else {
+                            Toast.makeText(context, "Harap isi semua kolom dengan benar.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Simpan Data Panen")
+                }
             }
         }
     }
@@ -310,17 +301,27 @@ fun AddHarvestScreen(
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                Button(onClick = { showDatePicker = false }) {
-                    Text("OK")
-                }
-            }
+            confirmButton = { Button(onClick = { showDatePicker = false }) { Text("OK") } }
         ) {
             DatePicker(state = dateState)
         }
     }
 }
 
+@Composable
+fun InfoRow(label: String, value: String, isBold: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, fontWeight = if(isBold) FontWeight.Bold else FontWeight.Normal)
+        Text(text = value, fontWeight = if(isBold) FontWeight.Bold else FontWeight.Normal)
+    }
+}
+
+
+// --- ProduceSaleScreen dan komponen lainnya (TIDAK ADA PERUBAHAN) ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProduceSaleScreen(
@@ -400,11 +401,9 @@ fun ProduceSaleScreen(
             }
         }
     ) { paddingValues ->
-        // ✅ --- PERUBAHAN UTAMA: Row diubah menjadi Column ---
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            // Bagian Atas: Daftar Hasil Panen
             LazyColumn(
-                modifier = Modifier.weight(1.5f), // Beri porsi lebih besar
+                modifier = Modifier.weight(1.5f),
                 contentPadding = PaddingValues(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -456,7 +455,6 @@ fun HarvestSaleItem(harvest: Harvest, onClick: () -> Unit) {
 fun CartPanel(
     modifier: Modifier = Modifier,
     cartItems: List<AgriCartItem>,
-    // Tambahkan parameter baru untuk onQuantityChange
     onQuantityChange: (AgriCartItem, Double) -> Unit,
     onRemoveItem: (AgriCartItem) -> Unit
 ) {
@@ -464,7 +462,6 @@ fun CartPanel(
         Text("Keranjang", style = MaterialTheme.typography.titleLarge)
         Spacer(modifier = Modifier.height(8.dp))
         if (cartItems.isEmpty()) {
-            // Tampilan keranjang kosong yang lebih menarik
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -485,7 +482,6 @@ fun CartPanel(
                 items(cartItems, key = { it.harvest.id }) { item ->
                     AgriCartItemRow(
                         item = item,
-                        // Kirim aksi ke ViewModel
                         onQuantityChange = { newQty -> onQuantityChange(item, newQty) },
                         onRemoveItem = { onRemoveItem(item) }
                     )
@@ -508,29 +504,21 @@ fun AgriCartItemRow(
         mutableStateOf(if (item.quantity % 1.0 == 0.0) item.quantity.toInt().toString() else item.quantity.toString())
     }
     val focusManager = LocalFocusManager.current
-
-    // ✅ --- State untuk menampilkan dialog peringatan ---
     var showStockAlert by remember { mutableStateOf(false) }
 
     val confirmChanges = {
         val newQty = textQuantity.toDoubleOrNull() ?: item.quantity
-
-        // ✅ --- LOGIKA PENGECEKAN STOK ---
         if (newQty > item.harvest.quantity) {
-            // Jika kuantitas melebihi stok, tampilkan alert
             showStockAlert = true
-            // Kembalikan teks ke jumlah stok maksimal
             textQuantity = item.harvest.quantity.toString()
         } else if (newQty != item.quantity) {
-            // Jika stok cukup dan nilai berubah, update kuantitas
             onQuantityChange(newQty)
         }
-        focusManager.clearFocus() // Sembunyikan keyboard
+        focusManager.clearFocus()
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Baris Atas: Nama produk dan tombol hapus (tidak berubah)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -541,22 +529,16 @@ fun AgriCartItemRow(
                     Icon(Icons.Default.Delete, "Hapus Item", tint = MaterialTheme.colorScheme.error)
                 }
             }
-
-            // ✅ Tampilkan informasi stok di bawah nama produk
             Text(
                 "Stok tersedia: ${item.harvest.quantity} ${item.harvest.unit}",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Baris Bawah: Kontrol kuantitas dan subtotal
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Kontrol Kuantitas
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -596,7 +578,6 @@ fun AgriCartItemRow(
 
                     OutlinedButton(
                         onClick = {
-                            // Cek stok sebelum menambah dengan tombol '+'
                             if (item.quantity + 1 <= item.harvest.quantity) {
                                 onQuantityChange(item.quantity + 1)
                             } else {
@@ -609,10 +590,7 @@ fun AgriCartItemRow(
                         Icon(Icons.Default.Add, "Tambah")
                     }
                 }
-
                 Spacer(modifier = Modifier.weight(1f))
-
-                // Subtotal per item (tidak berubah)
                 Text(
                     currencyFormat.format(subtotal),
                     fontWeight = FontWeight.SemiBold,
@@ -621,8 +599,6 @@ fun AgriCartItemRow(
             }
         }
     }
-
-    // ✅ --- AlertDialog untuk Peringatan Stok ---
     if (showStockAlert) {
         AlertDialog(
             onDismissRequest = { showStockAlert = false },

@@ -128,4 +128,12 @@ class AgriViewModel(
     fun insert(harvest: Harvest) = viewModelScope.launch {
         agriRepository.insert(harvest)
     }
+
+    fun insertPanenToCycle(harvest: Harvest, cycleId: String) = viewModelScope.launch {
+        // Ganti pemanggilan fungsi yang lama dengan yang baru
+        // agriRepository.insert(harvest) // <-- HAPUS ATAU KOMENTARI BARIS INI
+
+        // ✅ Panggil fungsi baru yang menyimpan ke sub-koleksi
+        agriRepository.addHarvestToCycle(harvest, cycleId)
+    }
 }

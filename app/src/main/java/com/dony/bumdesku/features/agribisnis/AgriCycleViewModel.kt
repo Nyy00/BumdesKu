@@ -17,9 +17,6 @@ class AgriCycleViewModel(
 
     private val _activeUnitUsahaId = MutableStateFlow<String?>(null)
 
-    // --- PERBAIKAN UTAMA DI SINI ---
-    // Kita kembali menggunakan MutableStateFlow untuk kontrol penuh
-
     private val _selectedCycle = MutableStateFlow<ProductionCycle?>(null)
     val selectedCycle: StateFlow<ProductionCycle?> = _selectedCycle.asStateFlow()
 
@@ -29,8 +26,17 @@ class AgriCycleViewModel(
     private val _paymentAccounts = MutableStateFlow<List<Account>>(emptyList())
     val paymentAccounts: StateFlow<List<Account>> = _paymentAccounts.asStateFlow()
 
+    // --- STATE BARU UNTUK HPP ---
+    private val _totalBiayaSiklus = MutableStateFlow(0.0)
+    val totalBiayaSiklus: StateFlow<Double> = _totalBiayaSiklus.asStateFlow()
+
+    private val _totalPanenSebelumnya = MutableStateFlow(0.0)
+    val totalPanenSebelumnya: StateFlow<Double> = _totalPanenSebelumnya.asStateFlow()
+
+    private val _hppSementara = MutableStateFlow(0.0)
+    val hppSementara: StateFlow<Double> = _hppSementara.asStateFlow()
+
     init {
-        // [BARU] Ambil data akun Kas dan Bank saat ViewModel dibuat
         viewModelScope.launch {
             accountRepository.allAccounts.collect { allAccounts ->
                 _paymentAccounts.value = allAccounts.filter {
@@ -43,8 +49,6 @@ class AgriCycleViewModel(
     private var cycleJob: Job? = null
     private var costsJob: Job? = null
 
-
-    // Flow lain tetap menggunakan stateIn karena tidak terpengaruh masalah ini
     val costAccounts: StateFlow<List<Account>> = accountRepository.allAccounts
         .map { accounts -> accounts.filter { it.category == AccountCategory.BEBAN } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -59,28 +63,22 @@ class AgriCycleViewModel(
         _activeUnitUsahaId.value = unitUsahaId
     }
 
-    // Fungsi getCycleDetails sekarang akan mengelola job secara manual
     fun getCycleDetails(cycleId: String) {
-        // Hentikan job lama jika ada untuk mencegah kebocoran memori
         cycleJob?.cancel()
         costsJob?.cancel()
 
-        // Mulai job baru untuk mengamati detail siklus
         cycleJob = viewModelScope.launch {
             cycleRepository.getCycleById(cycleId).collect { cycle ->
                 _selectedCycle.value = cycle
             }
         }
 
-        // Mulai job baru untuk mengamati rincian biaya
         costsJob = viewModelScope.launch {
             cycleRepository.getCostsForCycle(cycleId).collect { costs ->
                 _cycleCosts.value = costs
             }
         }
     }
-
-    // --- Fungsi lain tidak ada perubahan ---
 
     fun createProductionCycle(name: String, startDate: Long) {
         viewModelScope.launch {
@@ -109,15 +107,34 @@ class AgriCycleViewModel(
         }
     }
 
-    fun finishProductionCycle(cycle: ProductionCycle, totalHarvest: Double) {
+    fun finishProductionCycle(cycle: ProductionCycle) {
         viewModelScope.launch {
-            cycleRepository.finishCycle(cycle, totalHarvest)
+            cycleRepository.finishCycle(cycle)
         }
     }
 
     fun archiveCycle(cycle: ProductionCycle) {
         viewModelScope.launch {
             cycleRepository.archiveCycle(cycle)
+        }
+    }
+
+    // --- FUNGSI BARU UNTUK HPP ---
+    fun getHppInitialData(cycleId: String) {
+        viewModelScope.launch {
+            _totalBiayaSiklus.value = cycleRepository.getTotalCostByCycleId(cycleId)
+            _totalPanenSebelumnya.value = cycleRepository.getTotalHarvestsByCycleId(cycleId)
+        }
+    }
+
+    fun calculateHpp(jumlahPanenHariIni: String) {
+        val panenHariIniKg = jumlahPanenHariIni.toDoubleOrNull() ?: 0.0
+        val totalPanenKeseluruhan = _totalPanenSebelumnya.value + panenHariIniKg
+
+        _hppSementara.value = if (totalPanenKeseluruhan > 0) {
+            _totalBiayaSiklus.value / totalPanenKeseluruhan
+        } else {
+            0.0
         }
     }
 }
