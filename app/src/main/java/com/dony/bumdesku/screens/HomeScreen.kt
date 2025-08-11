@@ -72,6 +72,11 @@ fun HomeScreen(
             QuickAction("Inventaris Agri", Icons.Default.Inventory2, "agri_inventory_list"),
             QuickAction("Laporan Penjualan", Icons.Default.Summarize, "agri_sale_report")
         )
+
+        UnitUsahaType.JASA_SEWA -> listOf(
+            QuickAction("Dasbor Sewa", Icons.Default.EventSeat, "rental_dashboard"),
+            QuickAction("Tambah Barang", Icons.Default.AddBusiness, "add_rental_item")
+        )
         else -> emptyList()
     }
 

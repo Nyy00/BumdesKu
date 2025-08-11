@@ -30,6 +30,9 @@ import com.dony.bumdesku.features.agribisnis.AgriSaleDetailViewModelFactory
 import com.dony.bumdesku.repository.*
 import com.dony.bumdesku.screens.*
 import com.dony.bumdesku.util.BluetoothPrinterService
+import com.dony.bumdesku.features.jasa_sewa.AddEditRentalItemScreen
+import com.dony.bumdesku.features.jasa_sewa.CreateRentalTransactionScreen
+import com.dony.bumdesku.features.jasa_sewa.RentalScreen
 import android.Manifest
 import com.dony.bumdesku.screens.UserGuideScreen
 import com.dony.bumdesku.data.FixedAssetDao
@@ -88,6 +91,7 @@ class MainActivity : ComponentActivity() {
         val agriDao = database.agriDao()
         val cycleDao = database.cycleDao()
         val fixedAssetDao = database.fixedAssetDao()
+        val rentalDao = database.rentalDao()
 
         val accountRepository = AccountRepository(accountDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
@@ -98,6 +102,7 @@ class MainActivity : ComponentActivity() {
         val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
         val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
         val fixedAssetRepository = FixedAssetRepository(fixedAssetDao)
+        val rentalRepository = RentalRepository(rentalDao)
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
@@ -142,7 +147,8 @@ class MainActivity : ComponentActivity() {
                     agriInventoryViewModelFactory = agriInventoryViewModelFactory,
                     agriSaleDetailViewModelFactory = agriSaleDetailViewModelFactory,
                     printerService = printerService,
-                    fixedAssetViewModelFactory = fixedAssetViewModelFactory
+                    fixedAssetViewModelFactory = fixedAssetViewModelFactory,
+                    rentalRepository = rentalRepository
                 )
             }
         }
@@ -164,7 +170,8 @@ fun BumdesApp(
     agriInventoryViewModelFactory: AgriInventoryViewModelFactory,
     agriSaleDetailViewModelFactory: AgriSaleDetailViewModelFactory,
     printerService: BluetoothPrinterService,
-    fixedAssetViewModelFactory: FixedAssetViewModelFactory
+    fixedAssetViewModelFactory: FixedAssetViewModelFactory,
+    rentalRepository: RentalRepository
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -172,12 +179,12 @@ fun BumdesApp(
 
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
     val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
+    val rentalViewModelFactory = RentalViewModelFactory(rentalRepository, authViewModel)
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        // ... (Rute lain seperti "home", "login", "transaction_list", dll tidak berubah)
         composable("home") {
             val debtViewModel: DebtViewModel = viewModel(factory = debtViewModelFactory)
             val userProfile by authViewModel.userProfile.collectAsStateWithLifecycle()
@@ -984,6 +991,66 @@ fun BumdesApp(
                     onNavigateUp = { navController.popBackStack() }
                 )
             }
+        }
+
+        composable("rental_dashboard") {
+            // Factory dibuat di atas, kita tinggal menggunakannya
+            val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+
+            // Panggil RentalScreen dengan parameter yang benar
+            RentalScreen(
+                viewModel = rentalViewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onNavigateToAddItem = { navController.navigate("add_rental_item") },
+                onNavigateToCreateTransaction = { navController.navigate("create_rental_transaction") },
+                onNavigateToEditItem = { itemId ->
+                    navController.navigate("edit_rental_item/$itemId")
+                }
+            )
+        }
+
+        composable("add_rental_item") {
+            val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+            AddEditRentalItemScreen(
+                viewModel = rentalViewModel,
+                itemToEdit = null, // Mode tambah, jadi itemToEdit adalah null
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "edit_rental_item/{itemId}",
+            arguments = listOf(navArgument("itemId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getString("itemId")
+            if (itemId != null) {
+                val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+
+                // ✅ CARA MENCARI ITEM YANG BENAR
+                val uiState by rentalViewModel.uiState.collectAsStateWithLifecycle()
+
+                // Menggunakan remember agar pencarian tidak dijalankan terus menerus
+                val itemToEdit = remember(uiState.rentalItems, itemId) {
+                    uiState.rentalItems.find { it.id == itemId }
+                }
+
+                // Hanya tampilkan layar jika item sudah ditemukan
+                itemToEdit?.let {
+                    AddEditRentalItemScreen(
+                        viewModel = rentalViewModel,
+                        itemToEdit = it,
+                        onNavigateUp = { navController.popBackStack() }
+                    )
+                }
+            }
+        }
+
+        composable("create_rental_transaction") {
+            val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+            CreateRentalTransactionScreen(
+                viewModel = rentalViewModel,
+                onNavigateUp = { navController.popBackStack() }
+            )
         }
     }
 }
