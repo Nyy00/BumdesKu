@@ -9,6 +9,10 @@ interface RentalDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRentalItem(item: RentalItem)
 
+    // ✅ TAMBAHKAN FUNGSI INI
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllRentalItems(items: List<RentalItem>)
+
     @Update
     suspend fun updateRentalItem(item: RentalItem)
 
@@ -24,6 +28,10 @@ interface RentalDao {
     // --- Operasi untuk RentalTransaction ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRentalTransaction(transaction: RentalTransaction)
+
+    // ✅ TAMBAHKAN FUNGSI INI
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllRentalTransactions(transactions: List<RentalTransaction>)
 
     @Update
     suspend fun updateRentalTransaction(transaction: RentalTransaction)

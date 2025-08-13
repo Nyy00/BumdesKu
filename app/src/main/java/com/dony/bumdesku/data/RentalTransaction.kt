@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "rental_transactions")
 data class RentalTransaction(
     @PrimaryKey
-    val id: String = "",
+    var id: String = "",
     val customerName: String = "",
     val rentalItemId: String = "",
     val itemName: String = "", // Denormalisasi untuk kemudahan tampilan

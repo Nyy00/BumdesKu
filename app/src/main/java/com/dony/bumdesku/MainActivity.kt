@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
         val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
         val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
         val fixedAssetRepository = FixedAssetRepository(fixedAssetDao)
-        val rentalRepository = RentalRepository(rentalDao)
+        val rentalRepository = RentalRepository(rentalDao, transactionRepository, accountRepository)
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
@@ -128,7 +128,8 @@ class MainActivity : ComponentActivity() {
             debtRepository,
             agriRepository,
             agriCycleRepository,
-            fixedAssetRepository
+            fixedAssetRepository,
+            rentalRepository
         )
 
         setContent {

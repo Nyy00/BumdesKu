@@ -1,5 +1,6 @@
 package com.dony.bumdesku.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.RentalItem
@@ -22,7 +23,7 @@ enum class RentalSaveState {
     IDLE, LOADING, SUCCESS, ERROR
 }
 
-// --- Perbaikan Utama di sini ---
+// --- ViewModel yang Sudah Diperbaiki ---
 class RentalViewModel(
     private val rentalRepository: RentalRepository,
     private val authViewModel: AuthViewModel // Mengambil AuthViewModel sebagai dependency
@@ -62,7 +63,8 @@ class RentalViewModel(
         try {
             val unitId = activeUnitUsaha.value?.id
             if (unitId != null) {
-                rentalRepository.saveRentalItem(item.copy(unitUsahaId = unitId))
+                // Memanggil metode repository yang benar
+                rentalRepository.saveItem(item.copy(unitUsahaId = unitId))
                 _saveState.value = RentalSaveState.SUCCESS
             } else {
                 throw IllegalStateException("Unit Usaha tidak aktif.")
@@ -72,12 +74,14 @@ class RentalViewModel(
         }
     }
 
+    // ✅ FUNGSI DIPERBAIKI: Menggunakan processNewRental
     fun createRental(transaction: RentalTransaction) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
             val unitId = activeUnitUsaha.value?.id
             if (unitId != null) {
-                rentalRepository.createRentalTransaction(transaction.copy(unitUsahaId = unitId))
+                // Memanggil metode repository yang baru
+                rentalRepository.processNewRental(transaction.copy(unitUsahaId = unitId))
                 _saveState.value = RentalSaveState.SUCCESS
             } else {
                 throw IllegalStateException("Unit Usaha tidak aktif.")
@@ -87,11 +91,26 @@ class RentalViewModel(
         }
     }
 
-    fun completeRental(transaction: RentalTransaction) = viewModelScope.launch {
+    fun deleteItem(item: RentalItem) = viewModelScope.launch {
         try {
-            rentalRepository.completeRentalTransaction(transaction)
+            rentalRepository.deleteItem(item)
+            // Anda bisa menambahkan state untuk notifikasi sukses jika perlu
         } catch (e: Exception) {
-            // Handle error jika ada
+            // Handle error
+            Log.e("RentalViewModel", "Gagal menghapus item: ${e.message}")
+        }
+    }
+
+
+    // ✅ FUNGSI DIPERBAIKI: Menggunakan processReturn
+    fun completeRental(transaction: RentalTransaction) = viewModelScope.launch {
+        _saveState.value = RentalSaveState.LOADING // Tambahkan state loading untuk feedback
+        try {
+            // Memanggil metode repository yang baru
+            rentalRepository.processReturn(transaction)
+            _saveState.value = RentalSaveState.SUCCESS
+        } catch (e: Exception) {
+            _saveState.value = RentalSaveState.ERROR
         }
     }
 

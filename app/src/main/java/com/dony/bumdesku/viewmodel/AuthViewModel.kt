@@ -42,7 +42,8 @@ class AuthViewModel(
     private val debtRepository: DebtRepository,
     private val agriRepository: AgriRepository,
     private val agriCycleRepository: AgriCycleRepository,
-    private val fixedAssetRepository: FixedAssetRepository
+    private val fixedAssetRepository: FixedAssetRepository,
+    private val rentalRepository: RentalRepository
 ) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
@@ -94,6 +95,11 @@ class AuthViewModel(
             activeListeners.add(agriCycleRepository.syncAllCostsForManager())
             activeListeners.add(agriRepository.syncAllAgriInventoryForManager())
             activeListeners.add(fixedAssetRepository.syncAllAssetsForManager())
+            _allUnitUsahaList.value.forEach { unit ->
+                if(unit.id.isNotBlank()) {
+                    activeListeners.addAll(rentalRepository.syncDataForUnit(unit.id))
+                }
+            }
         } catch (e: Exception) {
             Log.e("AuthViewModel", "Failed to trigger sync for manager/auditor", e)
         }
@@ -129,6 +135,9 @@ class AuthViewModel(
                             activeListeners.add(agriCycleRepository.syncCostsForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(agriRepository.syncAgriInventoryForUser(profile.managedUnitUsahaIds))
                             activeListeners.add(fixedAssetRepository.syncAssetsForUser(profile.managedUnitUsahaIds))
+                            profile.managedUnitUsahaIds.forEach { unitId ->
+                                activeListeners.addAll(rentalRepository.syncDataForUnit(unitId))
+                            }
                         }
 
                         fetchUserManagedUnitUsaha(profile, isLoginProcess)

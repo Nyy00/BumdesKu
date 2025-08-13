@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "rental_items")
 data class RentalItem(
     @PrimaryKey
-    val id: String = "",
+    var id: String = "",
     val name: String = "",
     val description: String = "",
     val rentalPricePerDay: Double = 0.0,
