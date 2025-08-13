@@ -5,21 +5,27 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.data.RentalItem
 import com.dony.bumdesku.data.RentalTransaction
+import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import com.dony.bumdesku.viewmodel.RentalSaveState
 import com.dony.bumdesku.viewmodel.RentalViewModel
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,9 +42,10 @@ fun RentalScreen(
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
 
+    var transactionToComplete by remember { mutableStateOf<RentalTransaction?>(null) }
     var itemToDelete by remember { mutableStateOf<RentalItem?>(null) }
+    var itemToRepair by remember { mutableStateOf<RentalItem?>(null) }
 
-    // Menampilkan notifikasi Toast setelah proses simpan/update/selesai
     LaunchedEffect(saveState) {
         when (saveState) {
             RentalSaveState.SUCCESS -> {
@@ -59,7 +66,7 @@ fun RentalScreen(
                 title = { Text("Dasbor Jasa Sewa") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                     }
                 },
                 actions = {
@@ -109,7 +116,8 @@ fun RentalScreen(
                         RentalItemView(
                             item = item,
                             onClick = { onNavigateToEditItem(item.id) },
-                            onDeleteClick = { itemToDelete = item } // ✅ Tampilkan dialog saat ikon hapus diklik
+                            onDeleteClick = { itemToDelete = item },
+                            onRepairClick = { itemToRepair = item }
                         )
                     }
                 }
@@ -124,7 +132,7 @@ fun RentalScreen(
                     items(uiState.activeTransactions) { transaction ->
                         RentalTransactionView(
                             transaction = transaction,
-                            onCompleteClick = { viewModel.completeRental(transaction) }
+                            onCompleteClick = { transactionToComplete = transaction }
                         )
                     }
                 }
@@ -136,7 +144,7 @@ fun RentalScreen(
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
             title = { Text("Konfirmasi Hapus") },
-            text = { Text("Anda yakin ingin menghapus barang '${item.name}'? Aksi ini tidak dapat dibatalkan.") },
+            text = { Text("Anda yakin ingin menghapus barang '${item.name}'?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -152,15 +160,37 @@ fun RentalScreen(
             }
         )
     }
+
+    transactionToComplete?.let { trx ->
+        CompleteRentalDialog(
+            transaction = trx,
+            onDismiss = { transactionToComplete = null },
+            onConfirm = { returnedConditions, notes ->
+                viewModel.completeRental(trx, returnedConditions, notes)
+                transactionToComplete = null
+            }
+        )
+    }
+
+    itemToRepair?.let { item ->
+        RepairItemDialog(
+            item = item,
+            onDismiss = { itemToRepair = null },
+            onConfirm = { quantity, fromCondition, repairCost ->
+                viewModel.repairItem(item, quantity, fromCondition, repairCost)
+                itemToRepair = null
+            }
+        )
+    }
 }
 
 @Composable
 fun RentalItemView(
     item: RentalItem,
     onClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onRepairClick: () -> Unit
 ) {
-    val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -171,13 +201,25 @@ fun RentalItemView(
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Harga Sewa: ${currencyFormat.format(item.rentalPricePerDay)}/hari")
-                Text("Stok Tersedia: ${item.availableStock} dari ${item.totalStock}")
+                Text("Bisa Disewa: ${item.getAvailableStock()}", style = MaterialTheme.typography.bodyMedium)
+                if (item.stockRusakRingan > 0) {
+                    Text("Rusak Ringan: ${item.stockRusakRingan}", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFFFA500))
+                }
+                if (item.stockPerluPerbaikan > 0) {
+                    Text("Perlu Perbaikan: ${item.stockPerluPerbaikan}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                }
             }
-            IconButton(onClick = onDeleteClick) {
-                Icon(Icons.Default.DeleteOutline, "Hapus Barang", tint = MaterialTheme.colorScheme.outline)
+            Row {
+                if (item.stockRusakRingan > 0 || item.stockPerluPerbaikan > 0) {
+                    IconButton(onClick = onRepairClick) {
+                        Icon(Icons.Default.Build, "Perbaiki Barang", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                IconButton(onClick = onDeleteClick) {
+                    Icon(Icons.Default.DeleteOutline, "Hapus Barang", tint = MaterialTheme.colorScheme.outline)
+                }
             }
         }
     }
@@ -185,15 +227,169 @@ fun RentalItemView(
 
 @Composable
 fun RentalTransactionView(transaction: RentalTransaction, onCompleteClick: () -> Unit) {
+    val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     Card(modifier = Modifier
         .fillMaxWidth()
         .padding(vertical = 4.dp)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Penyewa: ${transaction.customerName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("Barang: ${transaction.itemName} (x${transaction.quantity})")
+            Text("Barang: ${transaction.itemName} (x${transaction.quantity})", style = MaterialTheme.typography.bodyMedium)
+            Text("Wajib Kembali: ${dateFormat.format(Date(transaction.expectedReturnDate))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             Button(onClick = onCompleteClick, modifier = Modifier.align(Alignment.End)) {
                 Text("Selesaikan (Kembali)")
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompleteRentalDialog(
+    transaction: RentalTransaction,
+    onDismiss: () -> Unit,
+    onConfirm: (Map<String, Int>, String) -> Unit
+) {
+    var baikCount by remember { mutableStateOf(transaction.quantity.toString()) }
+    var rusakRinganCount by remember { mutableStateOf("0") }
+    var perluPerbaikanCount by remember { mutableStateOf("0") }
+    var notes by remember { mutableStateOf("") }
+
+    val totalReturned = (baikCount.toIntOrNull() ?: 0) +
+            (rusakRinganCount.toIntOrNull() ?: 0) +
+            (perluPerbaikanCount.toIntOrNull() ?: 0)
+
+    val isCountValid = totalReturned == transaction.quantity
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pengembalian: ${transaction.itemName} (x${transaction.quantity})") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Masukkan jumlah barang yang dikembalikan sesuai kondisinya.")
+                ConditionInputRow(label = "Kondisi Baik", value = baikCount, onValueChange = { baikCount = it })
+                ConditionInputRow(label = "Rusak Ringan", value = rusakRinganCount, onValueChange = { rusakRinganCount = it })
+                ConditionInputRow(label = "Perlu Perbaikan", value = perluPerbaikanCount, onValueChange = { perluPerbaikanCount = it })
+
+                if (!isCountValid) {
+                    Text(
+                        "Total jumlah harus sama dengan ${transaction.quantity}! (Saat ini: $totalReturned)",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Catatan Pengembalian (Opsional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val returnedConditions = mapOf(
+                        "Baik" to (baikCount.toIntOrNull() ?: 0),
+                        "Rusak Ringan" to (rusakRinganCount.toIntOrNull() ?: 0),
+                        "Perlu Perbaikan" to (perluPerbaikanCount.toIntOrNull() ?: 0)
+                    )
+                    onConfirm(returnedConditions, notes)
+                },
+                enabled = isCountValid
+            ) {
+                Text("Konfirmasi")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+fun ConditionInputRow(label: String, value: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.filter { c -> c.isDigit() }) },
+        label = { Text(label) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RepairItemDialog(
+    item: RentalItem,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, String, Double) -> Unit
+) {
+    val conditionOptions = mutableListOf<String>()
+    if (item.stockRusakRingan > 0) conditionOptions.add("Rusak Ringan")
+    if (item.stockPerluPerbaikan > 0) conditionOptions.add("Perlu Perbaikan")
+
+    var selectedCondition by remember { mutableStateOf(conditionOptions.firstOrNull() ?: "") }
+    var quantity by remember { mutableStateOf("1") }
+    var repairCost by remember { mutableStateOf("") }
+    var isDropdownExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Catat Perbaikan: ${item.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                ExposedDropdownMenuBox(
+                    expanded = isDropdownExpanded,
+                    onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                ) {
+                    OutlinedTextField(
+                        value = selectedCondition,
+                        onValueChange = {}, readOnly = true, label = { Text("Kondisi Asal") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(expanded = isDropdownExpanded, onDismissRequest = { isDropdownExpanded = false }) {
+                        conditionOptions.forEach { condition ->
+                            DropdownMenuItem(
+                                text = { Text(condition) },
+                                onClick = {
+                                    selectedCondition = condition
+                                    isDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it.filter { c -> c.isDigit() } },
+                    label = { Text("Jumlah Diperbaiki") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                OutlinedTextField(
+                    value = repairCost,
+                    onValueChange = { repairCost = it.filter { c -> c.isDigit() } },
+                    label = { Text("Total Biaya Perbaikan (Opsional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(quantity.toIntOrNull() ?: 0, selectedCondition, repairCost.toDoubleOrNull() ?: 0.0) },
+                enabled = selectedCondition.isNotBlank() && (quantity.toIntOrNull() ?: 0) > 0
+            ) {
+                Text("Konfirmasi")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
 }

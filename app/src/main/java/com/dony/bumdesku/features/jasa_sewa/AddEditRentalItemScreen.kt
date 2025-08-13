@@ -29,15 +29,14 @@ fun AddEditRentalItemScreen(
 ) {
     var name by remember { mutableStateOf(itemToEdit?.name ?: "") }
     var price by remember { mutableStateOf(itemToEdit?.rentalPricePerDay?.toLong()?.toString() ?: "") }
-    // ✅ DEKLARASIKAN VARIABEL lateFee DI SINI
     var lateFee by remember { mutableStateOf(itemToEdit?.lateFeePerDay?.toLong()?.toString() ?: "") }
-    var totalStock by remember { mutableStateOf(itemToEdit?.totalStock?.toString() ?: "") }
+    // Jika mode edit, tampilkan total stok. Jika mode tambah, biarkan kosong.
+    var totalStock by remember { mutableStateOf(if (itemToEdit != null) itemToEdit.getTotalStock().toString() else "") }
     val isEditMode = itemToEdit != null
     val context = LocalContext.current
 
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
 
-    // Menampilkan Toast dan navigasi setelah proses simpan selesai
     LaunchedEffect(saveState) {
         when (saveState) {
             RentalSaveState.SUCCESS -> {
@@ -101,22 +100,25 @@ fun AddEditRentalItemScreen(
             OutlinedTextField(
                 value = totalStock,
                 onValueChange = { totalStock = it.filter { c -> c.isDigit() } },
-                label = { Text("Jumlah Stok Total") },
+                label = { Text(if (isEditMode) "Total Stok (Tidak dapat diubah)" else "Jumlah Stok Awal") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                readOnly = isEditMode // Stok tidak bisa diubah saat edit
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = {
+                    val totalStockInt = totalStock.toIntOrNull() ?: 0
                     val newItem = (itemToEdit ?: RentalItem()).copy(
                         name = name,
                         rentalPricePerDay = price.toDoubleOrNull() ?: 0.0,
                         lateFeePerDay = lateFee.toDoubleOrNull() ?: 0.0,
-                        totalStock = totalStock.toIntOrNull() ?: 0,
-                        // Stok tersedia diatur sama dengan total stok saat barang baru dibuat
-                        availableStock = if (isEditMode) itemToEdit!!.availableStock else totalStock.toIntOrNull() ?: 0
+                        // Saat item baru dibuat, semua stok dianggap "Baik"
+                        stockBaik = if (isEditMode) itemToEdit!!.stockBaik else totalStockInt,
+                        stockRusakRingan = if (isEditMode) itemToEdit!!.stockRusakRingan else 0,
+                        stockPerluPerbaikan = if (isEditMode) itemToEdit!!.stockPerluPerbaikan else 0
                     )
                     viewModel.saveItem(newItem)
                 },

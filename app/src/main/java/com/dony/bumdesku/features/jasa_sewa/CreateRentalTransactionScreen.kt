@@ -43,7 +43,6 @@ fun CreateRentalTransactionScreen(
     var quantity by remember { mutableStateOf("1") }
     var isDropdownExpanded by remember { mutableStateOf(false) }
 
-    // Menampilkan Toast dan navigasi setelah proses simpan selesai
     LaunchedEffect(saveState) {
         when (saveState) {
             RentalSaveState.SUCCESS -> {
@@ -79,7 +78,6 @@ fun CreateRentalTransactionScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Dropdown untuk memilih barang
             ExposedDropdownMenuBox(
                 expanded = isDropdownExpanded,
                 onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
@@ -100,12 +98,14 @@ fun CreateRentalTransactionScreen(
                 ) {
                     availableItems.forEach { item ->
                         DropdownMenuItem(
-                            text = { Text("${item.name} (Stok: ${item.availableStock})") },
+                            // ✅ PERBAIKAN DI SINI
+                            text = { Text("${item.name} (Stok: ${item.getAvailableStock()})") },
                             onClick = {
                                 selectedItem = item
                                 isDropdownExpanded = false
                             },
-                            enabled = item.availableStock > 0
+                            // ✅ DAN DI SINI
+                            enabled = item.getAvailableStock() > 0
                         )
                     }
                 }
@@ -122,7 +122,8 @@ fun CreateRentalTransactionScreen(
                 value = quantity,
                 onValueChange = { newQty ->
                     val qty = newQty.filter { c -> c.isDigit() }.toIntOrNull() ?: 1
-                    val maxStock = selectedItem?.availableStock ?: 1
+                    // ✅ DAN DI SINI
+                    val maxStock = selectedItem?.getAvailableStock() ?: 1
                     if (qty <= maxStock) {
                         quantity = newQty.filter { c -> c.isDigit() }
                     } else {

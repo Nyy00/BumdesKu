@@ -17,5 +17,6 @@ data class RentalTransaction(
     val pricePerDay: Double = 0.0,
     var totalPrice: Double = 0.0,
     var status: String = "Disewa",
+    var notesOnReturn: String = "",
     val unitUsahaId: String = ""
 )
