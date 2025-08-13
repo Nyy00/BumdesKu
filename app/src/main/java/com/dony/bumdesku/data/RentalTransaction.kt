@@ -9,12 +9,13 @@ data class RentalTransaction(
     var id: String = "",
     val customerName: String = "",
     val rentalItemId: String = "",
-    val itemName: String = "", // Denormalisasi untuk kemudahan tampilan
+    val itemName: String = "",
     val quantity: Int = 1,
     val rentalDate: Long = System.currentTimeMillis(),
-    var returnDate: Long? = null, // Diisi saat barang dikembalikan
+    val expectedReturnDate: Long = 0L,
+    var returnDate: Long? = null,
     val pricePerDay: Double = 0.0,
     var totalPrice: Double = 0.0,
-    var status: String = "Disewa", // Status: "Disewa" atau "Selesai"
+    var status: String = "Disewa",
     val unitUsahaId: String = ""
 )

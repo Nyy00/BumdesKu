@@ -30,7 +30,7 @@ import java.util.UUID
         RentalItem::class,
         RentalTransaction::class
     ],
-    version = 22, // NAIKKAN VERSI DATABASE
+    version = 23, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {

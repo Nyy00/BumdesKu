@@ -97,9 +97,38 @@ class RentalRepository(
     suspend fun processReturn(transaction: RentalTransaction) {
         withContext(Dispatchers.IO) {
             val returnTimestamp = System.currentTimeMillis()
+
+            val itemToReturn = rentalDao.getRentalItemById(transaction.rentalItemId)
+                ?: throw IllegalStateException("Item sewa tidak ditemukan di database lokal.")
+
+            // --- LOGIKA PERHITUNGAN BARU ---
+            // 1. Hitung durasi sewa aktual (tetap sama)
             val durationInMillis = returnTimestamp - transaction.rentalDate
             val durationInDays = ceil(durationInMillis / (1000.0 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
-            val finalPrice = transaction.pricePerDay * transaction.quantity * durationInDays
+            val rentalCost = transaction.pricePerDay * transaction.quantity * durationInDays
+
+            // 2. Hitung keterlambatan dengan membandingkan tanggalnya saja
+            var lateFee = 0.0
+
+            // Atur waktu ke awal hari untuk perbandingan yang adil
+            val calReturn = Calendar.getInstance().apply { timeInMillis = returnTimestamp }
+            val calExpected = Calendar.getInstance().apply { timeInMillis = transaction.expectedReturnDate }
+
+            val isSameDayOrBefore = calReturn.get(Calendar.YEAR) < calExpected.get(Calendar.YEAR) ||
+                    (calReturn.get(Calendar.YEAR) == calExpected.get(Calendar.YEAR) &&
+                            calReturn.get(Calendar.DAY_OF_YEAR) <= calExpected.get(Calendar.DAY_OF_YEAR))
+
+            if (!isSameDayOrBefore) { // Jika tidak sama hari atau sebelumnya (artinya terlambat)
+                // Hitung selisih hari keterlambatan
+                val lateDurationInMillis = returnTimestamp - transaction.expectedReturnDate
+                val lateInDays = ceil(lateDurationInMillis / (1000.0 * 60 * 60 * 24)).toInt()
+                if (lateInDays > 0) {
+                    lateFee = itemToReturn.lateFeePerDay * lateInDays
+                }
+            }
+
+            val finalPrice = rentalCost + lateFee
+            // ------------------------------------
 
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
@@ -109,8 +138,11 @@ class RentalRepository(
                 throw IllegalStateException("Akun Kas Tunai (111) atau Pendapatan Jasa Sewa (413) tidak ditemukan.")
             }
 
+            val description = "Pendapatan sewa ${transaction.itemName} oleh ${transaction.customerName}" +
+                    if (lateFee > 0) " (termasuk denda keterlambatan)" else ""
+
             val financialTransaction = Transaction(
-                description = "Pendapatan dari sewa ${transaction.itemName}",
+                description = description,
                 amount = finalPrice,
                 date = returnTimestamp,
                 debitAccountId = kasAccount.id,
@@ -129,13 +161,11 @@ class RentalRepository(
             )
             firestore.collection("rental_transactions").document(transaction.id).set(updatedTransaction).await()
 
-            val itemToReturn = rentalDao.getRentalItemById(transaction.rentalItemId)
-            if(itemToReturn != null) {
-                val updatedItem = itemToReturn.copy(availableStock = itemToReturn.availableStock + transaction.quantity)
-                firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
-            }
+            val updatedItemStock = itemToReturn.copy(availableStock = itemToReturn.availableStock + transaction.quantity)
+            firestore.collection("rental_items").document(updatedItemStock.id).set(updatedItemStock).await()
         }
     }
+
 
     suspend fun deleteItem(item: RentalItem) {
         withContext(Dispatchers.IO) {

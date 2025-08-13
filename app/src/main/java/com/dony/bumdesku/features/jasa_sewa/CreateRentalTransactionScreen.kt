@@ -6,7 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,6 +19,9 @@ import com.dony.bumdesku.data.RentalItem
 import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.viewmodel.RentalSaveState
 import com.dony.bumdesku.viewmodel.RentalViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,12 +29,14 @@ fun CreateRentalTransactionScreen(
     viewModel: RentalViewModel,
     onNavigateUp: () -> Unit
 ) {
-    // ✅ CARA MENGAMBIL DATA YANG BENAR
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableItems = uiState.rentalItems
 
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    val dateState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    var showDatePicker by remember { mutableStateOf(false) }
 
     var selectedItem by remember { mutableStateOf<RentalItem?>(null) }
     var customerName by remember { mutableStateOf("") }
@@ -60,7 +65,7 @@ fun CreateRentalTransactionScreen(
                 title = { Text("Buat Transaksi Sewa") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
                     }
                 }
             )
@@ -118,7 +123,6 @@ fun CreateRentalTransactionScreen(
                 onValueChange = { newQty ->
                     val qty = newQty.filter { c -> c.isDigit() }.toIntOrNull() ?: 1
                     val maxStock = selectedItem?.availableStock ?: 1
-                    // Batasi jumlah tidak melebihi stok yang tersedia
                     if (qty <= maxStock) {
                         quantity = newQty.filter { c -> c.isDigit() }
                     } else {
@@ -130,24 +134,41 @@ fun CreateRentalTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Tanggal Wajib Kembali",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                )
+                Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    val selectedDate = dateState.selectedDateMillis?.let {
+                        SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(it))
+                    } ?: "Pilih Tanggal"
+                    Text(selectedDate)
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
             Button(
                 onClick = {
                     val item = selectedItem
-                    if (item != null && customerName.isNotBlank()) {
+                    val expectedReturn = dateState.selectedDateMillis
+                    if (item != null && customerName.isNotBlank() && expectedReturn != null) {
                         val transaction = RentalTransaction(
                             customerName = customerName,
                             rentalItemId = item.id,
                             itemName = item.name,
                             quantity = quantity.toIntOrNull() ?: 1,
-                            pricePerDay = item.rentalPricePerDay,
-                            // Harga total dihitung berdasarkan jumlah dan harga per hari
-                            totalPrice = item.rentalPricePerDay * (quantity.toIntOrNull() ?: 1)
+                            expectedReturnDate = expectedReturn,
+                            pricePerDay = item.rentalPricePerDay
                         )
                         viewModel.createRental(transaction)
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = selectedItem != null && saveState != RentalSaveState.LOADING // Nonaktifkan saat loading
+                enabled = selectedItem != null && saveState != RentalSaveState.LOADING
             ) {
                 if (saveState == RentalSaveState.LOADING) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
@@ -156,5 +177,11 @@ fun CreateRentalTransactionScreen(
                 }
             }
         }
+    }
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = { Button(onClick = { showDatePicker = false }) { Text("OK") } }
+        ) { DatePicker(state = dateState) }
     }
 }
