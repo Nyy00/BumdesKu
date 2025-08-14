@@ -44,7 +44,7 @@ fun AddEditRentalItemScreen(
                 viewModel.resetSaveState()
                 onNavigateUp()
             }
-            RentalSaveState.ERROR -> {
+            is RentalSaveState.ERROR -> {
                 Toast.makeText(context, "Gagal menyimpan barang", Toast.LENGTH_SHORT).show()
                 viewModel.resetSaveState()
             }

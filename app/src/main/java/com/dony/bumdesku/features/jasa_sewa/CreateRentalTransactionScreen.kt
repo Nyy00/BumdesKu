@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -32,16 +33,33 @@ fun CreateRentalTransactionScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableItems = uiState.rentalItems
 
+    val availableStockResult by viewModel.availabilityState.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val dateState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    val dateRangePickerState = rememberDateRangePickerState()
     var showDatePicker by remember { mutableStateOf(false) }
 
     var selectedItem by remember { mutableStateOf<RentalItem?>(null) }
     var customerName by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("1") }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Mengambil tanggal dari state picker
+    val startDate = dateRangePickerState.selectedStartDateMillis
+    val endDate = dateRangePickerState.selectedEndDateMillis
+
+    LaunchedEffect(selectedItem, startDate, endDate) {
+        // Ambil unitId dari item yang sedang dipilih
+        val unitId = selectedItem?.unitUsahaId
+
+        if (selectedItem != null && unitId != null && startDate != null && endDate != null) {
+            // Pastikan unitId dikirim saat memanggil viewModel
+            viewModel.checkItemAvailability(selectedItem!!.id, unitId, startDate, endDate)
+        } else {
+            viewModel.clearAvailabilityCheck()
+        }
+    }
 
     LaunchedEffect(saveState) {
         when (saveState) {
@@ -50,8 +68,9 @@ fun CreateRentalTransactionScreen(
                 viewModel.resetSaveState()
                 onNavigateUp()
             }
-            RentalSaveState.ERROR -> {
-                Toast.makeText(context, "Gagal membuat transaksi (mungkin stok tidak cukup)", Toast.LENGTH_SHORT).show()
+            is RentalSaveState.ERROR -> {
+                val errorMessage = (saveState as RentalSaveState.ERROR).message
+                Toast.makeText(context, "Gagal: $errorMessage", Toast.LENGTH_LONG).show()
                 viewModel.resetSaveState()
             }
             else -> {}
@@ -98,13 +117,11 @@ fun CreateRentalTransactionScreen(
                 ) {
                     availableItems.forEach { item ->
                         DropdownMenuItem(
-                            // ✅ PERBAIKAN DI SINI
                             text = { Text("${item.name} (Stok: ${item.getAvailableStock()})") },
                             onClick = {
                                 selectedItem = item
                                 isDropdownExpanded = false
                             },
-                            // ✅ DAN DI SINI
                             enabled = item.getAvailableStock() > 0
                         )
                     }
@@ -121,55 +138,88 @@ fun CreateRentalTransactionScreen(
             OutlinedTextField(
                 value = quantity,
                 onValueChange = { newQty ->
-                    val qty = newQty.filter { c -> c.isDigit() }.toIntOrNull() ?: 1
-                    // ✅ DAN DI SINI
-                    val maxStock = selectedItem?.getAvailableStock() ?: 1
-                    if (qty <= maxStock) {
-                        quantity = newQty.filter { c -> c.isDigit() }
-                    } else {
-                        Toast.makeText(context, "Jumlah melebihi stok tersedia ($maxStock)", Toast.LENGTH_SHORT).show()
-                    }
+                    val qty = newQty.filter { c -> c.isDigit() }
+                    quantity = qty
                 },
                 label = { Text("Jumlah") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
 
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Tanggal Wajib Kembali",
+                    text = "Rentang Tanggal Sewa",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
                 Button(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-                    val selectedDate = dateState.selectedDateMillis?.let {
-                        SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(it))
-                    } ?: "Pilih Tanggal"
-                    Text(selectedDate)
+                    val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                    val startDateText = startDate?.let { formatter.format(Date(it)) } ?: "Mulai"
+                    val endDateText = endDate?.let { formatter.format(Date(it)) } ?: "Selesai"
+                    Text("$startDateText  -  $endDateText")
+                }
+            }
+
+            Box(modifier = Modifier.padding(vertical = 8.dp)) {
+                availableStockResult?.let { result ->
+                    result.fold(
+                        onSuccess = { stock ->
+                            Text(
+                                text = "Stok tersedia pada tanggal tersebut: $stock",
+                                color = if (stock > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        onFailure = { error ->
+                            Text(
+                                text = "Gagal memeriksa stok: ${error.message}",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    )
+                } ?: run {
+                    if (selectedItem != null && startDate != null && endDate != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Memeriksa ketersediaan...", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.weight(1f))
 
+            val stockForSelectedDate = availableStockResult?.getOrNull() ?: -1
+            val quantityInt = quantity.toIntOrNull() ?: 0
+
+            val canSave = selectedItem != null &&
+                    customerName.isNotBlank() &&
+                    startDate != null &&
+                    endDate != null &&
+                    quantityInt > 0 &&
+                    saveState != RentalSaveState.LOADING &&
+                    stockForSelectedDate >= quantityInt
+
             Button(
                 onClick = {
-                    val item = selectedItem
-                    val expectedReturn = dateState.selectedDateMillis
-                    if (item != null && customerName.isNotBlank() && expectedReturn != null) {
-                        val transaction = RentalTransaction(
-                            customerName = customerName,
-                            rentalItemId = item.id,
-                            itemName = item.name,
-                            quantity = quantity.toIntOrNull() ?: 1,
-                            expectedReturnDate = expectedReturn,
-                            pricePerDay = item.rentalPricePerDay
-                        )
-                        viewModel.createRental(transaction)
-                    }
+                    val transaction = RentalTransaction(
+                        customerName = customerName,
+                        rentalItemId = selectedItem!!.id,
+                        itemName = selectedItem!!.name,
+                        quantity = quantityInt,
+                        rentalDate = startDate!!,
+                        expectedReturnDate = endDate!!,
+                        pricePerDay = selectedItem!!.rentalPricePerDay,
+                        status = "Dipesan"
+                    )
+                    viewModel.createRental(transaction)
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = selectedItem != null && saveState != RentalSaveState.LOADING
+                enabled = canSave
             ) {
                 if (saveState == RentalSaveState.LOADING) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
@@ -179,10 +229,21 @@ fun CreateRentalTransactionScreen(
             }
         }
     }
+
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = { Button(onClick = { showDatePicker = false }) { Text("OK") } }
-        ) { DatePicker(state = dateState) }
+            confirmButton = {
+                Button(
+                    onClick = { showDatePicker = false },
+                    enabled = dateRangePickerState.selectedEndDateMillis != null // Tombol OK aktif jika rentang sudah dipilih
+                ) { Text("OK") }
+            },
+            dismissButton = {
+                Button(onClick = { showDatePicker = false }) { Text("Batal") }
+            }
+        ) {
+            DateRangePicker(state = dateRangePickerState)
+        }
     }
 }

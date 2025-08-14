@@ -23,7 +23,6 @@ class RentalRepository(
     private val firestore = Firebase.firestore
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    // ... (fungsi syncDataForUnit, getRentalItems, getRentalTransactions tidak berubah)
     fun syncDataForUnit(unitId: String): List<ListenerRegistration> {
         val itemListener = firestore.collection("rental_items").whereEqualTo("unitUsahaId", unitId)
             .addSnapshotListener { snapshots, e ->
@@ -31,6 +30,7 @@ class RentalRepository(
                     Log.w("RentalRepository", "Listen for rental items failed.", e)
                     return@addSnapshotListener
                 }
+                Log.d("RentalRepository", "Snapshot listener for rental_items received ${snapshots?.size() ?: 0} documents.")
                 scope.launch {
                     val items = snapshots?.documents?.mapNotNull { doc ->
                         doc.toObject(RentalItem::class.java)?.apply { id = doc.id }
@@ -79,27 +79,62 @@ class RentalRepository(
         }
     }
 
+
     suspend fun processNewRental(transaction: RentalTransaction) {
         withContext(Dispatchers.IO) {
             val itemToRent = rentalDao.getRentalItemById(transaction.rentalItemId)
                 ?: throw IllegalStateException("Item tidak ditemukan di database lokal.")
 
-            if (itemToRent.getAvailableStock() < transaction.quantity) {
-                throw IllegalStateException("Stok untuk ${transaction.itemName} tidak mencukupi.")
+            // Panggil fungsi yang baru kita buat untuk validasi ketersediaan
+            val availableStockOnDate = checkAvailability(
+                transaction.rentalItemId,
+                transaction.unitUsahaId,
+                transaction.rentalDate,
+                transaction.expectedReturnDate
+            )
+            if (transaction.quantity > availableStockOnDate) {
+                throw IllegalStateException("Stok tidak mencukupi untuk tanggal yang dipilih. Sisa: $availableStockOnDate")
+            }
+            val finalTransaction = transaction.copy(status = "Dipesan")
+            firestore.collection("rental_transactions").add(finalTransaction).await()
+
+        }
+    }
+
+
+    suspend fun checkAvailability(itemId: String, unitUsahaId: String, startDate: Long, endDate: Long): Int {
+        return withContext(Dispatchers.IO) {
+            val item = rentalDao.getRentalItemById(itemId)
+            val totalStockBaik = item?.getAvailableStock() ?: 0
+
+            val overlappingTransactions = firestore.collection("rental_transactions")
+                .whereEqualTo("rentalItemId", itemId)
+                .whereEqualTo("unitUsahaId", unitUsahaId)
+                .whereIn("status", listOf("Disewa", "Dipesan"))
+                .get()
+                .await()
+
+            var bookedQuantity = 0
+            for (doc in overlappingTransactions.documents) {
+                val transaction = doc.toObject(RentalTransaction::class.java)
+                if (transaction != null) {
+                    val rentalStarts = transaction.rentalDate
+                    val rentalEnds = transaction.expectedReturnDate
+                    if (startDate < rentalEnds && rentalStarts < endDate) {
+                        bookedQuantity += transaction.quantity
+                    }
+                }
             }
 
-            val transactionId = UUID.randomUUID().toString()
-            val finalTransaction = transaction.copy(id = transactionId)
-            firestore.collection("rental_transactions").document(transactionId).set(finalTransaction).await()
-
-            val updatedItem = itemToRent.copy(stockBaik = itemToRent.stockBaik - transaction.quantity)
-            firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
+            val availableStock = totalStockBaik - bookedQuantity
+            if (availableStock < 0) 0 else availableStock
         }
     }
 
     suspend fun processReturn(
         transaction: RentalTransaction,
         returnedConditions: Map<String, Int>,
+        damageCost: Double,
         notes: String
     ) {
         withContext(Dispatchers.IO) {
@@ -123,19 +158,22 @@ class RentalRepository(
                     lateFee = itemToReturn.lateFeePerDay * lateInDays
                 }
             }
-            val finalPrice = rentalCost + lateFee
+            val rentalAndLateFeePrice = rentalCost + lateFee
 
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
             val pendapatanSewaAccount = allAccounts.find { it.accountNumber == "413" }
-            if (kasAccount == null || pendapatanSewaAccount == null) {
-                throw IllegalStateException("Akun Kas Tunai (111) atau Pendapatan Jasa Sewa (413) tidak ditemukan.")
+            val pendapatanLainAccount = allAccounts.find { it.accountNumber == "421" }
+
+            if (kasAccount == null || pendapatanSewaAccount == null || pendapatanLainAccount == null) {
+                throw IllegalStateException("Akun Kas (111), Pendapatan Jasa Sewa (413), atau Pendapatan Lain (421) tidak ditemukan.")
             }
-            val description = "Pendapatan sewa ${transaction.itemName} oleh ${transaction.customerName}" +
+
+            val rentalDescription = "Pendapatan sewa ${transaction.itemName} oleh ${transaction.customerName}" +
                     if (lateFee > 0) " (termasuk denda keterlambatan)" else ""
-            val financialTransaction = Transaction(
-                description = description,
-                amount = finalPrice,
+            val rentalFinancialTransaction = Transaction(
+                description = rentalDescription,
+                amount = rentalAndLateFeePrice,
                 date = returnTimestamp,
                 debitAccountId = kasAccount.id,
                 creditAccountId = pendapatanSewaAccount.id,
@@ -144,17 +182,31 @@ class RentalRepository(
                 unitUsahaId = transaction.unitUsahaId,
                 userId = ""
             )
-            transactionRepository.insert(financialTransaction)
+            transactionRepository.insert(rentalFinancialTransaction)
+
+            if (damageCost > 0) {
+                val damageTransaction = Transaction(
+                    description = "Denda kerusakan ${transaction.itemName} oleh ${transaction.customerName}",
+                    amount = damageCost,
+                    date = returnTimestamp,
+                    debitAccountId = kasAccount.id,
+                    creditAccountId = pendapatanLainAccount.id,
+                    debitAccountName = kasAccount.accountName,
+                    creditAccountName = pendapatanLainAccount.accountName,
+                    unitUsahaId = transaction.unitUsahaId,
+                    userId = ""
+                )
+                transactionRepository.insert(damageTransaction)
+            }
 
             val updatedTransaction = transaction.copy(
                 status = "Selesai",
                 returnDate = returnTimestamp,
-                totalPrice = finalPrice,
+                totalPrice = rentalAndLateFeePrice + damageCost,
                 notesOnReturn = notes
             )
             firestore.collection("rental_transactions").document(transaction.id).set(updatedTransaction).await()
 
-            // LOGIKA BARU UNTUK UPDATE STOK BERDASARKAN KONDISI
             val updatedItem = itemToReturn.copy(
                 stockBaik = itemToReturn.stockBaik + (returnedConditions["Baik"] ?: 0),
                 stockRusakRingan = itemToReturn.stockRusakRingan + (returnedConditions["Rusak Ringan"] ?: 0),

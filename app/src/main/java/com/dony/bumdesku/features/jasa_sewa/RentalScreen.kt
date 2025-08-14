@@ -52,7 +52,7 @@ fun RentalScreen(
                 Toast.makeText(context, "Operasi berhasil", Toast.LENGTH_SHORT).show()
                 viewModel.resetSaveState()
             }
-            RentalSaveState.ERROR -> {
+            is RentalSaveState.ERROR -> {
                 Toast.makeText(context, "Operasi gagal", Toast.LENGTH_SHORT).show()
                 viewModel.resetSaveState()
             }
@@ -165,8 +165,8 @@ fun RentalScreen(
         CompleteRentalDialog(
             transaction = trx,
             onDismiss = { transactionToComplete = null },
-            onConfirm = { returnedConditions, notes ->
-                viewModel.completeRental(trx, returnedConditions, notes)
+            onConfirm = { returnedConditions, damageCost, notes ->
+                viewModel.completeRental(trx, returnedConditions, damageCost, notes)
                 transactionToComplete = null
             }
         )
@@ -247,12 +247,15 @@ fun RentalTransactionView(transaction: RentalTransaction, onCompleteClick: () ->
 fun CompleteRentalDialog(
     transaction: RentalTransaction,
     onDismiss: () -> Unit,
-    onConfirm: (Map<String, Int>, String) -> Unit
+    // --- 1. UBAH PARAMETER onConfirm ---
+    onConfirm: (returnedConditions: Map<String, Int>, damageCost: Double, notes: String) -> Unit
 ) {
     var baikCount by remember { mutableStateOf(transaction.quantity.toString()) }
     var rusakRinganCount by remember { mutableStateOf("0") }
     var perluPerbaikanCount by remember { mutableStateOf("0") }
     var notes by remember { mutableStateOf("") }
+    // --- 2. TAMBAHKAN STATE UNTUK BIAYA KERUSAKAN ---
+    var damageCost by remember { mutableStateOf("") }
 
     val totalReturned = (baikCount.toIntOrNull() ?: 0) +
             (rusakRinganCount.toIntOrNull() ?: 0) +
@@ -264,26 +267,41 @@ fun CompleteRentalDialog(
         onDismissRequest = onDismiss,
         title = { Text("Pengembalian: ${transaction.itemName} (x${transaction.quantity})") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Masukkan jumlah barang yang dikembalikan sesuai kondisinya.")
-                ConditionInputRow(label = "Kondisi Baik", value = baikCount, onValueChange = { baikCount = it })
-                ConditionInputRow(label = "Rusak Ringan", value = rusakRinganCount, onValueChange = { rusakRinganCount = it })
-                ConditionInputRow(label = "Perlu Perbaikan", value = perluPerbaikanCount, onValueChange = { perluPerbaikanCount = it })
+            // Gunakan LazyColumn agar bisa di-scroll jika layar kecil
+            LazyColumn {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Masukkan jumlah barang yang dikembalikan sesuai kondisinya.")
+                        ConditionInputRow(label = "Kondisi Baik", value = baikCount, onValueChange = { baikCount = it })
+                        ConditionInputRow(label = "Rusak Ringan", value = rusakRinganCount, onValueChange = { rusakRinganCount = it })
+                        ConditionInputRow(label = "Perlu Perbaikan", value = perluPerbaikanCount, onValueChange = { perluPerbaikanCount = it })
 
-                if (!isCountValid) {
-                    Text(
-                        "Total jumlah harus sama dengan ${transaction.quantity}! (Saat ini: $totalReturned)",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                        if (!isCountValid) {
+                            Text(
+                                "Total jumlah harus sama dengan ${transaction.quantity}! (Saat ini: $totalReturned)",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        // --- 3. TAMBAHKAN INPUT FIELD UNTUK BIAYA KERUSAKAN ---
+                        OutlinedTextField(
+                            value = damageCost,
+                            onValueChange = { damageCost = it.filter { c -> c.isDigit() } },
+                            label = { Text("Biaya Kerusakan (Opsional)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = ThousandSeparatorVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = { notes = it },
+                            label = { Text("Catatan Pengembalian (Opsional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Catatan Pengembalian (Opsional)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         },
         confirmButton = {
@@ -294,7 +312,12 @@ fun CompleteRentalDialog(
                         "Rusak Ringan" to (rusakRinganCount.toIntOrNull() ?: 0),
                         "Perlu Perbaikan" to (perluPerbaikanCount.toIntOrNull() ?: 0)
                     )
-                    onConfirm(returnedConditions, notes)
+                    // --- 4. KIRIM damageCost SAAT KONFIRMASI ---
+                    onConfirm(
+                        returnedConditions,
+                        damageCost.toDoubleOrNull() ?: 0.0,
+                        notes
+                    )
                 },
                 enabled = isCountValid
             ) {
@@ -306,7 +329,6 @@ fun CompleteRentalDialog(
         }
     )
 }
-
 @Composable
 fun ConditionInputRow(label: String, value: String, onValueChange: (String) -> Unit) {
     OutlinedTextField(
