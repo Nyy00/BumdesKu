@@ -113,8 +113,11 @@ fun RentalScreen(
                     item { Text("Belum ada barang sewaan yang ditambahkan.") }
                 } else {
                     items(uiState.rentalItems) { item ->
+                        val rentedQty = uiState.rentedStockMap[item.id] ?: 0
+
                         RentalItemView(
                             item = item,
+                            rentedQuantity = rentedQty,
                             onClick = { onNavigateToEditItem(item.id) },
                             onDeleteClick = { itemToDelete = item },
                             onRepairClick = { itemToRepair = item }
@@ -187,6 +190,7 @@ fun RentalScreen(
 @Composable
 fun RentalItemView(
     item: RentalItem,
+    rentedQuantity: Int,
     onClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onRepairClick: () -> Unit
@@ -204,6 +208,13 @@ fun RentalItemView(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("Bisa Disewa: ${item.getAvailableStock()}", style = MaterialTheme.typography.bodyMedium)
+                if (rentedQuantity > 0) {
+                    Text(
+                        "Sedang Disewakan: $rentedQuantity",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Red // Opsional, agar lebih menonjol
+                    )
+                }
                 if (item.stockRusakRingan > 0) {
                     Text("Rusak Ringan: ${item.stockRusakRingan}", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFFFA500))
                 }

@@ -15,7 +15,8 @@ data class RentalUiState(
     val rentalItems: List<RentalItem> = emptyList(),
     val activeTransactions: List<RentalTransaction> = emptyList(),
     val completedTransactions: List<RentalTransaction> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val rentedStockMap: Map<String, Int> = emptyMap()
 )
 
 sealed class RentalSaveState {
@@ -53,11 +54,18 @@ class RentalViewModel(
                 Log.d("RentalViewModel", "Data diterima dari Room: ${items.size} item, ${transactions.size} transaksi")
                 val active = transactions.filter { it.status == "Disewa" || it.status == "Dipesan" }
                 val completed = transactions.filter { it.status == "Selesai" }
+                val rentedStockMap = items.associate { item ->
+                    val rentedQty = active
+                        .filter { it.rentalItemId == item.id }
+                        .sumOf { it.quantity }
+                    item.id to rentedQty
+                }
                 RentalUiState(
                     isLoading = false,
                     rentalItems = items,
                     activeTransactions = active,
-                    completedTransactions = completed
+                    completedTransactions = completed,
+                    rentedStockMap = rentedStockMap
                 )
             }
         }

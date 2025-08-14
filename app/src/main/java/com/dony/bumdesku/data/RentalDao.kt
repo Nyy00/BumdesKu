@@ -1,15 +1,20 @@
 package com.dony.bumdesku.data
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RentalDao {
-    // --- Operasi untuk RentalItem ---
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRentalItem(item: RentalItem)
 
-    // ✅ TAMBAHKAN FUNGSI INI
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllRentalItems(items: List<RentalItem>)
 
@@ -25,11 +30,9 @@ interface RentalDao {
     @Query("SELECT * FROM rental_items WHERE id = :id")
     suspend fun getRentalItemById(id: String): RentalItem?
 
-    // --- Operasi untuk RentalTransaction ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRentalTransaction(transaction: RentalTransaction)
 
-    // ✅ TAMBAHKAN FUNGSI INI
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllRentalTransactions(transactions: List<RentalTransaction>)
 
@@ -38,4 +41,26 @@ interface RentalDao {
 
     @Query("SELECT * FROM rental_transactions WHERE unitUsahaId = :unitUsahaId ORDER BY rentalDate DESC")
     fun getAllRentalTransactions(unitUsahaId: String): Flow<List<RentalTransaction>>
+
+    // --- FUNGSI PENTING YANG PERLU ANDA TAMBAHKAN ---
+
+    @Transaction
+    suspend fun syncItems(unitUsahaId: String, items: List<RentalItem>) {
+        deleteItemsByUnitId(unitUsahaId)
+        insertAllRentalItems(items)
+    }
+
+    @Transaction
+    suspend fun syncTransactions(unitUsahaId: String, transactions: List<RentalTransaction>) {
+        deleteTransactionsByUnitId(unitUsahaId)
+        insertAllRentalTransactions(transactions)
+    }
+
+    // --- FUNGSI PEMBANTU YANG SUDAH DAN PERLU ANDA TAMBAHKAN ---
+
+    @Query("DELETE FROM rental_items WHERE unitUsahaId = :unitUsahaId")
+    suspend fun deleteItemsByUnitId(unitUsahaId: String)
+
+    @Query("DELETE FROM rental_transactions WHERE unitUsahaId = :unitUsahaId")
+    suspend fun deleteTransactionsByUnitId(unitUsahaId: String)
 }

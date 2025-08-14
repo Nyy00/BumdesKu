@@ -35,7 +35,7 @@ class RentalRepository(
                     val items = snapshots?.documents?.mapNotNull { doc ->
                         doc.toObject(RentalItem::class.java)?.apply { id = doc.id }
                     } ?: emptyList()
-                    rentalDao.insertAllRentalItems(items)
+                    rentalDao.syncItems(unitId, items)
                 }
             }
 
@@ -49,7 +49,7 @@ class RentalRepository(
                     val transactions = snapshots?.documents?.mapNotNull { doc ->
                         doc.toObject(RentalTransaction::class.java)?.apply { id = doc.id }
                     } ?: emptyList()
-                    rentalDao.insertAllRentalTransactions(transactions)
+                    rentalDao.syncTransactions(unitId, transactions)
                 }
             }
         return listOf(itemListener, transactionListener)
@@ -208,7 +208,7 @@ class RentalRepository(
             firestore.collection("rental_transactions").document(transaction.id).set(updatedTransaction).await()
 
             val updatedItem = itemToReturn.copy(
-                stockBaik = itemToReturn.stockBaik + (returnedConditions["Baik"] ?: 0),
+                stockBaik = (itemToReturn.stockBaik - transaction.quantity) + (returnedConditions["Baik"] ?: 0),
                 stockRusakRingan = itemToReturn.stockRusakRingan + (returnedConditions["Rusak Ringan"] ?: 0),
                 stockPerluPerbaikan = itemToReturn.stockPerluPerbaikan + (returnedConditions["Perlu Perbaikan"] ?: 0)
             )
