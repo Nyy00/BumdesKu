@@ -42,8 +42,6 @@ interface RentalDao {
     @Query("SELECT * FROM rental_transactions WHERE unitUsahaId = :unitUsahaId ORDER BY rentalDate DESC")
     fun getAllRentalTransactions(unitUsahaId: String): Flow<List<RentalTransaction>>
 
-    // --- FUNGSI PENTING YANG PERLU ANDA TAMBAHKAN ---
-
     @Transaction
     suspend fun syncItems(unitUsahaId: String, items: List<RentalItem>) {
         deleteItemsByUnitId(unitUsahaId)
@@ -56,11 +54,12 @@ interface RentalDao {
         insertAllRentalTransactions(transactions)
     }
 
-    // --- FUNGSI PEMBANTU YANG SUDAH DAN PERLU ANDA TAMBAHKAN ---
-
     @Query("DELETE FROM rental_items WHERE unitUsahaId = :unitUsahaId")
     suspend fun deleteItemsByUnitId(unitUsahaId: String)
 
     @Query("DELETE FROM rental_transactions WHERE unitUsahaId = :unitUsahaId")
     suspend fun deleteTransactionsByUnitId(unitUsahaId: String)
+
+    @Query("SELECT * FROM rental_transactions WHERE id = :id")
+    fun getRentalTransactionById(id: String): Flow<RentalTransaction?>
 }

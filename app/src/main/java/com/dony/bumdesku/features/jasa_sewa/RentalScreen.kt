@@ -35,7 +35,8 @@ fun RentalScreen(
     onNavigateUp: () -> Unit,
     onNavigateToAddItem: () -> Unit,
     onNavigateToCreateTransaction: () -> Unit,
-    onNavigateToEditItem: (String) -> Unit
+    onNavigateToEditItem: (String) -> Unit,
+    onNavigateToHistory: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
@@ -70,6 +71,9 @@ fun RentalScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToHistory) {
+                        Icon(Icons.Default.History, contentDescription = "Riwayat Sewa")
+                    }
                     IconButton(onClick = { showMenu = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Menu Lainnya")
                     }

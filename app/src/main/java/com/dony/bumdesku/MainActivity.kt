@@ -49,6 +49,9 @@ import com.dony.bumdesku.features.toko.PosViewModelFactory
 import com.dony.bumdesku.ui.theme.BumdesKuTheme
 import com.dony.bumdesku.viewmodel.*
 import com.dony.bumdesku.features.agribisnis.*
+import com.dony.bumdesku.features.jasa_sewa.RentalHistoryScreen
+import com.dony.bumdesku.features.jasa_sewa.RentalDetailScreen
+import androidx.navigation.navArgument
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 
@@ -149,7 +152,8 @@ class MainActivity : ComponentActivity() {
                     agriSaleDetailViewModelFactory = agriSaleDetailViewModelFactory,
                     printerService = printerService,
                     fixedAssetViewModelFactory = fixedAssetViewModelFactory,
-                    rentalRepository = rentalRepository
+                    rentalRepository = rentalRepository,
+                    bluetoothPrinterService = printerService
                 )
             }
         }
@@ -172,7 +176,8 @@ fun BumdesApp(
     agriSaleDetailViewModelFactory: AgriSaleDetailViewModelFactory,
     printerService: BluetoothPrinterService,
     fixedAssetViewModelFactory: FixedAssetViewModelFactory,
-    rentalRepository: RentalRepository
+    rentalRepository: RentalRepository,
+    bluetoothPrinterService: BluetoothPrinterService
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -180,7 +185,7 @@ fun BumdesApp(
 
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
     val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-    val rentalViewModelFactory = RentalViewModelFactory(rentalRepository, authViewModel)
+    val rentalViewModelFactory = RentalViewModelFactory(rentalRepository, authViewModel, bluetoothPrinterService)
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
@@ -995,10 +1000,8 @@ fun BumdesApp(
         }
 
         composable("rental_dashboard") {
-            // Factory dibuat di atas, kita tinggal menggunakannya
             val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
 
-            // Panggil RentalScreen dengan parameter yang benar
             RentalScreen(
                 viewModel = rentalViewModel,
                 onNavigateUp = { navController.popBackStack() },
@@ -1006,10 +1009,10 @@ fun BumdesApp(
                 onNavigateToCreateTransaction = { navController.navigate("create_rental_transaction") },
                 onNavigateToEditItem = { itemId ->
                     navController.navigate("edit_rental_item/$itemId")
-                }
+                },
+                onNavigateToHistory = { navController.navigate("rental_history_screen") }
             )
         }
-
         composable("add_rental_item") {
             val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
             AddEditRentalItemScreen(
@@ -1043,6 +1046,32 @@ fun BumdesApp(
                         onNavigateUp = { navController.popBackStack() }
                     )
                 }
+            }
+        }
+
+        composable("rental_history_screen") {
+            val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+            RentalHistoryScreen(
+                viewModel = rentalViewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onNavigateToDetail = { transactionId ->
+                    navController.navigate("rental_detail/$transactionId")
+                },
+            )
+        }
+        composable(
+            route = "rental_detail/{transactionId}",
+            arguments = listOf(navArgument("transactionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val transactionId = backStackEntry.arguments?.getString("transactionId")
+            if (transactionId != null) {
+                val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
+                RentalDetailScreen(
+                    viewModel = rentalViewModel,
+                    transactionId = transactionId,
+                    onNavigateUp = { navController.popBackStack() },
+                    printerService = bluetoothPrinterService
+                )
             }
         }
 

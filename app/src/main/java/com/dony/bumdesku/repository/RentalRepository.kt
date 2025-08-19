@@ -63,6 +63,10 @@ class RentalRepository(
         return rentalDao.getAllRentalTransactions(unitId)
     }
 
+    fun getRentalTransactionById(id: String): Flow<RentalTransaction?> {
+        return rentalDao.getRentalTransactionById(id)
+    }
+
     suspend fun saveItem(item: RentalItem) {
         withContext(Dispatchers.IO) {
             val itemId = if (item.id.isBlank()) UUID.randomUUID().toString() else item.id

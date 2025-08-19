@@ -5,11 +5,9 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import java.text.DecimalFormat
+import java.text.NumberFormat
+import java.util.Locale
 
-/**
- * Kelas utilitas untuk menambahkan pemisah ribuan (misal: 1.000.000)
- * pada TextField saat pengguna mengetik angka.
- */
 class ThousandSeparatorVisualTransformation : VisualTransformation {
     private val symbols = DecimalFormat().decimalFormatSymbols
     private val thousandsSeparator = symbols.groupingSeparator.toString()
@@ -42,4 +40,11 @@ class ThousandSeparatorVisualTransformation : VisualTransformation {
             text
         }
     }
+}
+
+
+fun formatCurrency(amount: Double): String {
+    val localeID = Locale("in", "ID")
+    val format = NumberFormat.getCurrencyInstance(localeID)
+    return format.format(amount)
 }

@@ -9,6 +9,11 @@ import com.dony.bumdesku.repository.RentalRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import com.dony.bumdesku.util.BluetoothPrinterService
 
 data class RentalUiState(
     val isLoading: Boolean = true,
@@ -28,7 +33,9 @@ sealed class RentalSaveState {
 
 class RentalViewModel(
     private val rentalRepository: RentalRepository,
-    private val authViewModel: AuthViewModel
+    private val authViewModel: AuthViewModel,
+    // ✅ Tambahkan parameter ini
+    private val bluetoothPrinterService: BluetoothPrinterService
 ) : ViewModel() {
 
     private val _availabilityState = MutableStateFlow<Result<Int>?>(null)
@@ -43,10 +50,8 @@ class RentalViewModel(
         Log.d("RentalViewModel", "Unit usaha aktif berubah, ID: ${unit?.id}")
 
         if (unit == null) {
-            // Jika tidak ada unit aktif, tampilkan state kosong
             flowOf(RentalUiState(isLoading = false))
         } else {
-            // Langsung ambil data dari Room DB.
             combine(
                 rentalRepository.getRentalItems(unit.id),
                 rentalRepository.getRentalTransactions(unit.id)
@@ -72,7 +77,7 @@ class RentalViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = RentalUiState(isLoading = true) // Set isLoading jadi true di awal
+        initialValue = RentalUiState(isLoading = true)
     )
 
     fun saveItem(item: RentalItem) = viewModelScope.launch {
@@ -86,7 +91,6 @@ class RentalViewModel(
                 throw IllegalStateException("Unit Usaha tidak aktif.")
             }
         } catch (e: Exception) {
-            // FIX: Pass the error message
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menyimpan item.")
         }
     }
@@ -107,6 +111,10 @@ class RentalViewModel(
         _availabilityState.value = null
     }
 
+    fun getRentalTransactionById(id: String): Flow<RentalTransaction?> {
+        return rentalRepository.getRentalTransactionById(id)
+    }
+
     fun createRental(transaction: RentalTransaction) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
@@ -118,7 +126,6 @@ class RentalViewModel(
                 throw IllegalStateException("Unit Usaha tidak aktif.")
             }
         } catch (e: Exception) {
-            // FIX: Pass the error message
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal membuat transaksi.")
         }
     }
@@ -127,7 +134,6 @@ class RentalViewModel(
         try {
             rentalRepository.deleteItem(item)
         } catch (e: Exception) {
-            // This is just a log, so it's fine, but we can also push a state error if needed.
             Log.e("RentalViewModel", "Gagal menghapus item: ${e.message}")
         }
     }
@@ -135,16 +141,14 @@ class RentalViewModel(
     fun completeRental(
         transaction: RentalTransaction,
         returnedConditions: Map<String, Int>,
-        damageCost: Double, // Parameter from our previous implementation
+        damageCost: Double,
         notes: String
     ) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
-            // Make sure to pass all required parameters to the repository
             rentalRepository.processReturn(transaction, returnedConditions, damageCost, notes)
             _saveState.value = RentalSaveState.SUCCESS
         } catch (e: Exception) {
-            // FIX: Pass the error message
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menyelesaikan transaksi.")
         }
     }
@@ -160,12 +164,52 @@ class RentalViewModel(
             rentalRepository.processItemRepair(item, quantity, fromCondition, repairCost)
             _saveState.value = RentalSaveState.SUCCESS
         } catch (e: Exception) {
-            // FIX: Pass the error message
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal memproses perbaikan.")
         }
     }
 
     fun resetSaveState() {
         _saveState.value = RentalSaveState.IDLE
+    }
+
+    // Fungsi untuk membuat teks struk (dipindah dari Composable)
+    fun buildRentalReceiptText(transaction: RentalTransaction): String {
+        val unitUsahaName = activeUnitUsaha.value?.name ?: "BUMDesku"
+        val dateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
+        val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
+
+        val builder = StringBuilder()
+        val esc: Char = 27.toChar()
+        val gs: Char = 29.toChar()
+        val initPrinter = byteArrayOf(esc.code.toByte(), 64)
+        val alignCenter = byteArrayOf(esc.code.toByte(), 97, 1)
+        val alignLeft = byteArrayOf(esc.code.toByte(), 97, 0)
+        val boldOn = byteArrayOf(esc.code.toByte(), 69, 1)
+        val boldOff = byteArrayOf(esc.code.toByte(), 69, 0)
+
+        builder.append(String(initPrinter))
+        builder.append(String(alignCenter))
+        builder.append(String(boldOn))
+        builder.append("$unitUsahaName - Jasa Sewa\n")
+        builder.append(String(boldOff))
+        builder.append("--------------------------------\n")
+        builder.append(String(alignLeft))
+        builder.append("Tgl: ${dateFormat.format(Date(transaction.returnDate ?: 0L))}\n")
+        builder.append("Penyewa: ${transaction.customerName}\n")
+        builder.append("--------------------------------\n")
+        builder.append("Barang: ${transaction.itemName}\n")
+        builder.append("Jumlah: ${transaction.quantity}\n")
+        builder.append("Sewa dari: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.rentalDate))}\n")
+        builder.append("Selesai pada: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.returnDate ?: 0L))}\n")
+        builder.append("--------------------------------\n")
+        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\n")
+        if (transaction.notesOnReturn.isNotBlank()) {
+            builder.append("Catatan: ${transaction.notesOnReturn}\n")
+        }
+        builder.append("--------------------------------\n\n")
+        builder.append(String(alignCenter))
+        builder.append("Terima kasih!\n\n\n\n")
+
+        return builder.toString()
     }
 }
