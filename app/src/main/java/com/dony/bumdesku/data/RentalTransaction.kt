@@ -10,13 +10,16 @@ data class RentalTransaction(
     val customerName: String = "",
     val rentalItemId: String = "",
     val itemName: String = "",
-    val quantity: Int = 1,
-    val rentalDate: Long = System.currentTimeMillis(),
+    val quantity: Int = 0,
+    val rentalDate: Long = 0L,
     val expectedReturnDate: Long = 0L,
-    var returnDate: Long? = null,
+    val returnDate: Long? = null,
+    val totalPrice: Double = 0.0,
     val pricePerDay: Double = 0.0,
-    var totalPrice: Double = 0.0,
-    var status: String = "Disewa",
-    var notesOnReturn: String = "",
-    val unitUsahaId: String = ""
+    val status: String = "",
+    val notesOnReturn: String = "",
+
+    // Tambahkan dua field ini
+    val unitUsahaId: String = "",
+    val userId: String = ""
 )

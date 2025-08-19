@@ -206,6 +206,9 @@ fun CreateRentalTransactionScreen(
 
             Button(
                 onClick = {
+                    val unitUsahaId = selectedItem!!.unitUsahaId
+                    val userId = viewModel.getCurrentUserId() // Tambahkan fungsi ini di ViewModel
+
                     val transaction = RentalTransaction(
                         customerName = customerName,
                         rentalItemId = selectedItem!!.id,
@@ -214,8 +217,11 @@ fun CreateRentalTransactionScreen(
                         rentalDate = startDate!!,
                         expectedReturnDate = endDate!!,
                         pricePerDay = selectedItem!!.rentalPricePerDay,
-                        status = "Dipesan"
+                        status = "Dipesan",
+                        unitUsahaId = unitUsahaId, // Tambahkan ini
+                        userId = userId // Tambahkan ini
                     )
+
                     viewModel.createRental(transaction)
                 },
                 modifier = Modifier.fillMaxWidth(),

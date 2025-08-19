@@ -26,7 +26,7 @@ import java.util.Locale
 fun RentalHistoryScreen(
     viewModel: RentalViewModel,
     onNavigateUp: () -> Unit,
-    onNavigateToDetail: (String) -> Unit // ✅ Parameter navigasi detail baru
+    onNavigateToDetail: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -69,7 +69,6 @@ fun RentalHistoryScreen(
                     items(uiState.completedTransactions) { transaction ->
                         CompletedRentalTransactionView(
                             transaction = transaction,
-                            // ✅ Panggil fungsi navigasi saat item diklik
                             onClick = { onNavigateToDetail(transaction.id) }
                         )
                     }
@@ -83,15 +82,13 @@ fun RentalHistoryScreen(
 @Composable
 fun CompletedRentalTransactionView(
     transaction: RentalTransaction,
-    // ✅ Parameter onClick baru
-    onClick: (RentalTransaction) -> Unit
+    onClick: (String) -> Unit
 ) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            // ✅ Buat seluruh card bisa diklik
-            .clickable { onClick(transaction) }
+            .clickable { onClick(transaction.id) }
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Penyewa: ${transaction.customerName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

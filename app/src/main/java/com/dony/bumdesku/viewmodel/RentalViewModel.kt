@@ -34,7 +34,6 @@ sealed class RentalSaveState {
 class RentalViewModel(
     private val rentalRepository: RentalRepository,
     private val authViewModel: AuthViewModel,
-    // ✅ Tambahkan parameter ini
     private val bluetoothPrinterService: BluetoothPrinterService
 ) : ViewModel() {
 
@@ -115,18 +114,15 @@ class RentalViewModel(
         return rentalRepository.getRentalTransactionById(id)
     }
 
-    fun createRental(transaction: RentalTransaction) = viewModelScope.launch {
-        _saveState.value = RentalSaveState.LOADING
-        try {
-            val unitId = activeUnitUsaha.value?.id
-            if (unitId != null) {
-                rentalRepository.processNewRental(transaction.copy(unitUsahaId = unitId))
+    fun createRental(transaction: RentalTransaction) {
+        viewModelScope.launch {
+            _saveState.value = RentalSaveState.LOADING
+            try {
+                rentalRepository.processNewRental(transaction)
                 _saveState.value = RentalSaveState.SUCCESS
-            } else {
-                throw IllegalStateException("Unit Usaha tidak aktif.")
+            } catch (e: Exception) {
+                _saveState.value = RentalSaveState.ERROR(e.message ?: "Terjadi kesalahan")
             }
-        } catch (e: Exception) {
-            _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal membuat transaksi.")
         }
     }
 
@@ -172,7 +168,10 @@ class RentalViewModel(
         _saveState.value = RentalSaveState.IDLE
     }
 
-    // Fungsi untuk membuat teks struk (dipindah dari Composable)
+    fun getCurrentUserId(): String {
+        return authViewModel.userProfile.value?.uid ?: ""
+    }
+
     fun buildRentalReceiptText(transaction: RentalTransaction): String {
         val unitUsahaName = activeUnitUsaha.value?.name ?: "BUMDesku"
         val dateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
@@ -202,7 +201,7 @@ class RentalViewModel(
         builder.append("Sewa dari: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.rentalDate))}\n")
         builder.append("Selesai pada: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.returnDate ?: 0L))}\n")
         builder.append("--------------------------------\n")
-        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\n")
+        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\\n")
         if (transaction.notesOnReturn.isNotBlank()) {
             builder.append("Catatan: ${transaction.notesOnReturn}\n")
         }

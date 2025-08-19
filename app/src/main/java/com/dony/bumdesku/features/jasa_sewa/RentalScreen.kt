@@ -183,7 +183,7 @@ fun RentalScreen(
         RepairItemDialog(
             item = item,
             onDismiss = { itemToRepair = null },
-            onConfirm = { quantity, fromCondition, repairCost ->
+            onConfirmRepair = { quantity, fromCondition, repairCost ->
                 viewModel.repairItem(item, quantity, fromCondition, repairCost)
                 itemToRepair = null
             }
@@ -262,14 +262,12 @@ fun RentalTransactionView(transaction: RentalTransaction, onCompleteClick: () ->
 fun CompleteRentalDialog(
     transaction: RentalTransaction,
     onDismiss: () -> Unit,
-    // --- 1. UBAH PARAMETER onConfirm ---
     onConfirm: (returnedConditions: Map<String, Int>, damageCost: Double, notes: String) -> Unit
 ) {
     var baikCount by remember { mutableStateOf(transaction.quantity.toString()) }
     var rusakRinganCount by remember { mutableStateOf("0") }
     var perluPerbaikanCount by remember { mutableStateOf("0") }
     var notes by remember { mutableStateOf("") }
-    // --- 2. TAMBAHKAN STATE UNTUK BIAYA KERUSAKAN ---
     var damageCost by remember { mutableStateOf("") }
 
     val totalReturned = (baikCount.toIntOrNull() ?: 0) +
@@ -282,7 +280,6 @@ fun CompleteRentalDialog(
         onDismissRequest = onDismiss,
         title = { Text("Pengembalian: ${transaction.itemName} (x${transaction.quantity})") },
         text = {
-            // Gunakan LazyColumn agar bisa di-scroll jika layar kecil
             LazyColumn {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -299,7 +296,6 @@ fun CompleteRentalDialog(
                             )
                         }
 
-                        // --- 3. TAMBAHKAN INPUT FIELD UNTUK BIAYA KERUSAKAN ---
                         OutlinedTextField(
                             value = damageCost,
                             onValueChange = { damageCost = it.filter { c -> c.isDigit() } },
@@ -327,7 +323,6 @@ fun CompleteRentalDialog(
                         "Rusak Ringan" to (rusakRinganCount.toIntOrNull() ?: 0),
                         "Perlu Perbaikan" to (perluPerbaikanCount.toIntOrNull() ?: 0)
                     )
-                    // --- 4. KIRIM damageCost SAAT KONFIRMASI ---
                     onConfirm(
                         returnedConditions,
                         damageCost.toDoubleOrNull() ?: 0.0,
@@ -352,81 +347,5 @@ fun ConditionInputRow(label: String, value: String, onValueChange: (String) -> U
         label = { Text(label) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth()
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun RepairItemDialog(
-    item: RentalItem,
-    onDismiss: () -> Unit,
-    onConfirm: (Int, String, Double) -> Unit
-) {
-    val conditionOptions = mutableListOf<String>()
-    if (item.stockRusakRingan > 0) conditionOptions.add("Rusak Ringan")
-    if (item.stockPerluPerbaikan > 0) conditionOptions.add("Perlu Perbaikan")
-
-    var selectedCondition by remember { mutableStateOf(conditionOptions.firstOrNull() ?: "") }
-    var quantity by remember { mutableStateOf("1") }
-    var repairCost by remember { mutableStateOf("") }
-    var isDropdownExpanded by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Catat Perbaikan: ${item.name}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                ExposedDropdownMenuBox(
-                    expanded = isDropdownExpanded,
-                    onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
-                ) {
-                    OutlinedTextField(
-                        value = selectedCondition,
-                        onValueChange = {}, readOnly = true, label = { Text("Kondisi Asal") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = isDropdownExpanded, onDismissRequest = { isDropdownExpanded = false }) {
-                        conditionOptions.forEach { condition ->
-                            DropdownMenuItem(
-                                text = { Text(condition) },
-                                onClick = {
-                                    selectedCondition = condition
-                                    isDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = quantity,
-                    onValueChange = { quantity = it.filter { c -> c.isDigit() } },
-                    label = { Text("Jumlah Diperbaiki") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                OutlinedTextField(
-                    value = repairCost,
-                    onValueChange = { repairCost = it.filter { c -> c.isDigit() } },
-                    label = { Text("Total Biaya Perbaikan (Opsional)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = ThousandSeparatorVisualTransformation()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(quantity.toIntOrNull() ?: 0, selectedCondition, repairCost.toDoubleOrNull() ?: 0.0) },
-                enabled = selectedCondition.isNotBlank() && (quantity.toIntOrNull() ?: 0) > 0
-            ) {
-                Text("Konfirmasi")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Batal") }
-        }
     )
 }

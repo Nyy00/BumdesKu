@@ -99,12 +99,39 @@ class RentalRepository(
             if (transaction.quantity > availableStockOnDate) {
                 throw IllegalStateException("Stok tidak mencukupi untuk tanggal yang dipilih. Sisa: $availableStockOnDate")
             }
+
+            // --- BAGIAN BARU: MENGURANGI STOK SEBELUM MEMBUAT TRANSAKSI ---
+            val newStockBaik = itemToRent.stockBaik - transaction.quantity
+            val updatedItem = itemToRent.copy(stockBaik = newStockBaik)
+
+            // Perbarui item di database lokal (Room)
+            rentalDao.updateRentalItem(updatedItem)
+
+            // Perbarui item di Firestore
+            firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
+
+            // Sekarang, buat transaksi sewa
             val finalTransaction = transaction.copy(status = "Dipesan")
             firestore.collection("rental_transactions").add(finalTransaction).await()
 
         }
     }
 
+    suspend fun updateRentalItemStock(itemId: String, newStockBaik: Int, newStockRusak: Int, newStockPerbaikan: Int) {
+        val item = rentalDao.getRentalItemById(itemId)
+        if (item != null) {
+            val updatedItem = item.copy(
+                stockBaik = newStockBaik,
+                stockRusakRingan = newStockRusak,
+                stockPerluPerbaikan = newStockPerbaikan
+            )
+            rentalDao.updateRentalItem(updatedItem)
+        }
+    }
+
+    suspend fun updateRentalItem(item: RentalItem) {
+        rentalDao.updateRentalItem(item)
+    }
 
     suspend fun checkAvailability(itemId: String, unitUsahaId: String, startDate: Long, endDate: Long): Int {
         return withContext(Dispatchers.IO) {
