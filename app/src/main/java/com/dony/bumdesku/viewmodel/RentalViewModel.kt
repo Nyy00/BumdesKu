@@ -40,6 +40,9 @@ class RentalViewModel(
     private val _availabilityState = MutableStateFlow<Result<Int>?>(null)
     val availabilityState: StateFlow<Result<Int>?> = _availabilityState
 
+    private val _dueTransactions = MutableStateFlow<List<RentalTransaction>>(emptyList())
+    val dueTransactions: StateFlow<List<RentalTransaction>> = _dueTransactions.asStateFlow()
+
     private val activeUnitUsaha = authViewModel.activeUnitUsaha
     private val _saveState = MutableStateFlow<RentalSaveState>(RentalSaveState.IDLE)
     val saveState: StateFlow<RentalSaveState> = _saveState
@@ -56,14 +59,24 @@ class RentalViewModel(
                 rentalRepository.getRentalTransactions(unit.id)
             ) { items, transactions ->
                 Log.d("RentalViewModel", "Data diterima dari Room: ${items.size} item, ${transactions.size} transaksi")
+
+                // --- Perbaikan di sini ---
+                // Pisahkan transaksi aktif dari yang sudah selesai
                 val active = transactions.filter { it.status == "Disewa" || it.status == "Dipesan" }
                 val completed = transactions.filter { it.status == "Selesai" }
+
+                // Cek transaksi yang jatuh tempo
+                val due = active.filter { it.isOverdue() || it.isDueSoon() }
+                _dueTransactions.value = due // Perbarui StateFlow notifikasi
+
                 val rentedStockMap = items.associate { item ->
                     val rentedQty = active
                         .filter { it.rentalItemId == item.id }
                         .sumOf { it.quantity }
                     item.id to rentedQty
                 }
+                // --- Akhir perbaikan ---
+
                 RentalUiState(
                     isLoading = false,
                     rentalItems = items,
@@ -78,6 +91,7 @@ class RentalViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = RentalUiState(isLoading = true)
     )
+
 
     fun saveItem(item: RentalItem) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING

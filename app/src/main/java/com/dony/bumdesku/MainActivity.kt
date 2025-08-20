@@ -42,6 +42,11 @@ import com.dony.bumdesku.viewmodel.FixedAssetViewModelFactory
 import com.dony.bumdesku.screens.FixedAssetListScreen
 import com.dony.bumdesku.screens.AddFixedAssetScreen
 import android.os.Build
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.dony.bumdesku.util.RentalNotificationWorker
+import java.util.concurrent.TimeUnit
 import androidx.core.app.ActivityCompat
 import com.dony.bumdesku.features.toko.PosScreen
 import com.dony.bumdesku.features.toko.PosViewModel
@@ -80,6 +85,17 @@ class MainActivity : ComponentActivity() {
                 1
             )
         }
+
+        val rentalNotificationWorkRequest = PeriodicWorkRequestBuilder<RentalNotificationWorker>(
+            1, // Jalankan setiap 1 hari
+            TimeUnit.DAYS
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "rentalNotificationWork",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            rentalNotificationWorkRequest
+        )
 
         val printerService = BluetoothPrinterService(applicationContext)
 

@@ -1,7 +1,9 @@
 package com.dony.bumdesku.data
 
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
+import com.google.firebase.firestore.Exclude
 
 @Entity(tableName = "rental_transactions")
 data class RentalTransaction(
@@ -18,8 +20,23 @@ data class RentalTransaction(
     val pricePerDay: Double = 0.0,
     val status: String = "",
     val notesOnReturn: String = "",
-
-    // Tambahkan dua field ini
     val unitUsahaId: String = "",
     val userId: String = ""
-)
+) {
+
+    @Ignore
+    @Exclude
+    fun isOverdue(): Boolean {
+        // Hanya cek jika status belum selesai
+        return status != "Selesai" && expectedReturnDate < System.currentTimeMillis()
+    }
+
+    @Ignore
+    @Exclude
+    fun isDueSoon(): Boolean {
+        val now = System.currentTimeMillis()
+        val oneDayInMillis = 24 * 60 * 60 * 1000
+        // Cek jika status belum selesai dan tanggal kembali dalam 24 jam ke depan
+        return status != "Selesai" && expectedReturnDate > now && expectedReturnDate <= now + oneDayInMillis
+    }
+}

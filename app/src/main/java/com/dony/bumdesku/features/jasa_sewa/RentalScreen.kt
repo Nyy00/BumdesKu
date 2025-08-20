@@ -39,6 +39,7 @@ fun RentalScreen(
     onNavigateToHistory: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val dueTransactions by viewModel.dueTransactions.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
@@ -110,6 +111,11 @@ fun RentalScreen(
                     .fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // --- PANGGIL NOTIFIKASI DI SINI ---
+                item {
+                    RentalNotificationView(dueTransactions)
+                }
+
                 item {
                     Text("Barang Tersedia", style = MaterialTheme.typography.titleLarge)
                 }
@@ -188,6 +194,35 @@ fun RentalScreen(
                 itemToRepair = null
             }
         )
+    }
+}
+
+// --- Composable Notifikasi Baru ---
+@Composable
+fun RentalNotificationView(dueTransactions: List<RentalTransaction>) {
+    val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
+    if (dueTransactions.isNotEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Perhatian! Ada ${dueTransactions.size} Transaksi yang Perlu Ditinjau.",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Bold
+                )
+                dueTransactions.forEach { transaction ->
+                    val isOverdue = transaction.isOverdue()
+                    Text(
+                        text = "${transaction.itemName} (x${transaction.quantity}) - ${if (isOverdue) "Lewat Jatuh Tempo!" else "Akan Jatuh Tempo"} pada ${dateFormat.format(Date(transaction.expectedReturnDate))}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
     }
 }
 
