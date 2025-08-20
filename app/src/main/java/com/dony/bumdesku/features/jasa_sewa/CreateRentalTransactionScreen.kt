@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.data.Customer
 import com.dony.bumdesku.data.RentalItem
 import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.viewmodel.RentalSaveState
@@ -32,6 +33,7 @@ fun CreateRentalTransactionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableItems = uiState.rentalItems
+    val customers = uiState.customers
 
     val availableStockResult by viewModel.availabilityState.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
@@ -41,20 +43,19 @@ fun CreateRentalTransactionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
 
     var selectedItem by remember { mutableStateOf<RentalItem?>(null) }
-    var customerName by remember { mutableStateOf("") }
+    var selectedCustomer by remember { mutableStateOf<Customer?>(null) }
     var quantity by remember { mutableStateOf("1") }
-    var isDropdownExpanded by remember { mutableStateOf(false) }
+
+    var isItemDropdownExpanded by remember { mutableStateOf(false) }
+    var isCustomerDropdownExpanded by remember { mutableStateOf(false) }
 
     // Mengambil tanggal dari state picker
     val startDate = dateRangePickerState.selectedStartDateMillis
     val endDate = dateRangePickerState.selectedEndDateMillis
 
     LaunchedEffect(selectedItem, startDate, endDate) {
-        // Ambil unitId dari item yang sedang dipilih
         val unitId = selectedItem?.unitUsahaId
-
         if (selectedItem != null && unitId != null && startDate != null && endDate != null) {
-            // Pastikan unitId dikirim saat memanggil viewModel
             viewModel.checkItemAvailability(selectedItem!!.id, unitId, startDate, endDate)
         } else {
             viewModel.clearAvailabilityCheck()
@@ -97,30 +98,31 @@ fun CreateRentalTransactionScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Dropdown untuk memilih barang sewa
             ExposedDropdownMenuBox(
-                expanded = isDropdownExpanded,
-                onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                expanded = isItemDropdownExpanded,
+                onExpandedChange = { isItemDropdownExpanded = !isItemDropdownExpanded }
             ) {
                 OutlinedTextField(
                     value = selectedItem?.name ?: "Pilih Barang",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Barang yang Disewa") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDropdownExpanded) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isItemDropdownExpanded) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .menuAnchor()
                 )
                 ExposedDropdownMenu(
-                    expanded = isDropdownExpanded,
-                    onDismissRequest = { isDropdownExpanded = false }
+                    expanded = isItemDropdownExpanded,
+                    onDismissRequest = { isItemDropdownExpanded = false }
                 ) {
                     availableItems.forEach { item ->
                         DropdownMenuItem(
                             text = { Text("${item.name} (Stok: ${item.getAvailableStock()})") },
                             onClick = {
                                 selectedItem = item
-                                isDropdownExpanded = false
+                                isItemDropdownExpanded = false
                             },
                             enabled = item.getAvailableStock() > 0
                         )
@@ -128,12 +130,36 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
-            OutlinedTextField(
-                value = customerName,
-                onValueChange = { customerName = it },
-                label = { Text("Nama Pelanggan") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            // Dropdown untuk memilih pelanggan
+            ExposedDropdownMenuBox(
+                expanded = isCustomerDropdownExpanded,
+                onExpandedChange = { isCustomerDropdownExpanded = !isCustomerDropdownExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedCustomer?.name ?: "Pilih Pelanggan",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Penyewa") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCustomerDropdownExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = isCustomerDropdownExpanded,
+                    onDismissRequest = { isCustomerDropdownExpanded = false }
+                ) {
+                    customers.forEach { customer ->
+                        DropdownMenuItem(
+                            text = { Text(customer.name) },
+                            onClick = {
+                                selectedCustomer = customer
+                                isCustomerDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = quantity,
@@ -146,7 +172,7 @@ fun CreateRentalTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-
+            // ... Bagian tanggal sewa tidak berubah ...
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Rentang Tanggal Sewa",
@@ -197,7 +223,7 @@ fun CreateRentalTransactionScreen(
             val quantityInt = quantity.toIntOrNull() ?: 0
 
             val canSave = selectedItem != null &&
-                    customerName.isNotBlank() &&
+                    selectedCustomer != null &&
                     startDate != null &&
                     endDate != null &&
                     quantityInt > 0 &&
@@ -206,11 +232,9 @@ fun CreateRentalTransactionScreen(
 
             Button(
                 onClick = {
-                    val unitUsahaId = selectedItem!!.unitUsahaId
-                    val userId = viewModel.getCurrentUserId() // Tambahkan fungsi ini di ViewModel
-
                     val transaction = RentalTransaction(
-                        customerName = customerName,
+                        customerId = selectedCustomer!!.id,
+                        customerName = selectedCustomer!!.name,
                         rentalItemId = selectedItem!!.id,
                         itemName = selectedItem!!.name,
                         quantity = quantityInt,
@@ -218,8 +242,8 @@ fun CreateRentalTransactionScreen(
                         expectedReturnDate = endDate!!,
                         pricePerDay = selectedItem!!.rentalPricePerDay,
                         status = "Dipesan",
-                        unitUsahaId = unitUsahaId, // Tambahkan ini
-                        userId = userId // Tambahkan ini
+                        unitUsahaId = selectedItem!!.unitUsahaId,
+                        userId = viewModel.getCurrentUserId()
                     )
 
                     viewModel.createRental(transaction)
@@ -242,7 +266,7 @@ fun CreateRentalTransactionScreen(
             confirmButton = {
                 Button(
                     onClick = { showDatePicker = false },
-                    enabled = dateRangePickerState.selectedEndDateMillis != null // Tombol OK aktif jika rentang sudah dipilih
+                    enabled = dateRangePickerState.selectedEndDateMillis != null
                 ) { Text("OK") }
             },
             dismissButton = {

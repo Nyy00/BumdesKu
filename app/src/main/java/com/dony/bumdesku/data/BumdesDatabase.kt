@@ -28,9 +28,10 @@ import java.util.UUID
         CycleCost::class,
         FixedAsset::class,
         RentalItem::class,
-        RentalTransaction::class
+        RentalTransaction::class,
+        Customer::class
     ],
-    version = 25, // NAIKKAN VERSI DATABASE
+    version = 26, // NAIKKAN VERSI DATABASE
     exportSchema = false
 )
 abstract class BumdesDatabase : RoomDatabase() {
@@ -45,6 +46,7 @@ abstract class BumdesDatabase : RoomDatabase() {
     abstract fun cycleDao(): CycleDao
     abstract fun fixedAssetDao(): FixedAssetDao
     abstract fun rentalDao(): RentalDao
+    abstract fun customerDao(): CustomerDao
 
     companion object {
         @Volatile

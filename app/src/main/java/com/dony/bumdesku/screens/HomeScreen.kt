@@ -76,7 +76,8 @@ fun HomeScreen(
         UnitUsahaType.JASA_SEWA -> listOf(
             QuickAction("Dasbor Sewa", Icons.Default.EventSeat, "rental_dashboard"),
             QuickAction("Tambah Barang", Icons.Default.AddBusiness, "add_rental_item"),
-            QuickAction("Riwayat Sewa", Icons.Default.History, "rental_history_screen")
+            QuickAction("Riwayat Sewa", Icons.Default.History, "rental_history_screen"),
+            QuickAction("Manajemen Pelanggan", Icons.Default.PeopleAlt, "rental/customers")
         )
         else -> emptyList()
     }

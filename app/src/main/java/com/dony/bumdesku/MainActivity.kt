@@ -39,8 +39,6 @@ import com.dony.bumdesku.data.FixedAssetDao
 import com.dony.bumdesku.repository.FixedAssetRepository
 import com.dony.bumdesku.viewmodel.FixedAssetViewModel
 import com.dony.bumdesku.viewmodel.FixedAssetViewModelFactory
-import com.dony.bumdesku.screens.FixedAssetListScreen
-import com.dony.bumdesku.screens.AddFixedAssetScreen
 import android.os.Build
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -57,8 +55,12 @@ import com.dony.bumdesku.features.agribisnis.*
 import com.dony.bumdesku.features.jasa_sewa.RentalHistoryScreen
 import com.dony.bumdesku.features.jasa_sewa.RentalDetailScreen
 import androidx.navigation.navArgument
+import com.dony.bumdesku.features.jasa_sewa.AddEditCustomerScreen
+import com.dony.bumdesku.features.jasa_sewa.CustomerScreen
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import com.dony.bumdesku.screens.FixedAssetListScreen
+import com.dony.bumdesku.screens.AddFixedAssetScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -87,7 +89,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val rentalNotificationWorkRequest = PeriodicWorkRequestBuilder<RentalNotificationWorker>(
-            1, // Jalankan setiap 1 hari
+            1,
             TimeUnit.DAYS
         ).build()
 
@@ -111,6 +113,7 @@ class MainActivity : ComponentActivity() {
         val cycleDao = database.cycleDao()
         val fixedAssetDao = database.fixedAssetDao()
         val rentalDao = database.rentalDao()
+        val customerDao = database.customerDao()
 
         val accountRepository = AccountRepository(accountDao)
         val unitUsahaRepository = UnitUsahaRepository(unitUsahaDao)
@@ -122,6 +125,7 @@ class MainActivity : ComponentActivity() {
         val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
         val fixedAssetRepository = FixedAssetRepository(fixedAssetDao)
         val rentalRepository = RentalRepository(rentalDao, transactionRepository, accountRepository)
+        val customerRepository = CustomerRepository(customerDao)
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
@@ -137,7 +141,6 @@ class MainActivity : ComponentActivity() {
         val agriSaleDetailViewModelFactory = AgriSaleDetailViewModelFactory()
         val fixedAssetViewModelFactory = FixedAssetViewModelFactory(fixedAssetRepository, unitUsahaRepository)
 
-
         val authViewModelFactory = AuthViewModelFactory(
             unitUsahaRepository,
             transactionRepository,
@@ -148,7 +151,8 @@ class MainActivity : ComponentActivity() {
             agriRepository,
             agriCycleRepository,
             fixedAssetRepository,
-            rentalRepository
+            rentalRepository,
+            customerRepository
         )
 
         setContent {
@@ -169,7 +173,8 @@ class MainActivity : ComponentActivity() {
                     printerService = printerService,
                     fixedAssetViewModelFactory = fixedAssetViewModelFactory,
                     rentalRepository = rentalRepository,
-                    bluetoothPrinterService = printerService
+                    bluetoothPrinterService = printerService,
+                    customerRepository = customerRepository,
                 )
             }
         }
@@ -193,7 +198,8 @@ fun BumdesApp(
     printerService: BluetoothPrinterService,
     fixedAssetViewModelFactory: FixedAssetViewModelFactory,
     rentalRepository: RentalRepository,
-    bluetoothPrinterService: BluetoothPrinterService
+    bluetoothPrinterService: BluetoothPrinterService,
+    customerRepository: CustomerRepository,
 ) {
     val navController = rememberNavController()
     val auth = Firebase.auth
@@ -201,7 +207,14 @@ fun BumdesApp(
 
     val authViewModel: AuthViewModel = viewModel(factory = authViewModelFactory)
     val transactionViewModel: TransactionViewModel = viewModel(factory = transactionViewModelFactory)
-    val rentalViewModelFactory = RentalViewModelFactory(rentalRepository, authViewModel, bluetoothPrinterService)
+
+    val rentalViewModelFactory = RentalViewModelFactory(
+        rentalRepository = rentalRepository,
+        customerRepository = customerRepository,
+        authViewModel = authViewModel,
+        bluetoothPrinterService = bluetoothPrinterService
+    )
+    val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
 
     val startDestination = if (auth.currentUser != null) "home" else "login"
 
@@ -220,6 +233,43 @@ fun BumdesApp(
                 debtSummary = debtSummary,
                 activeUnitUsahaType = activeUnitUsaha?.type ?: UnitUsahaType.UMUM,
                 onNavigate = { route -> navController.navigate(route) }
+            )
+        }
+
+        composable(
+            route = "rental/customers"
+        ) {
+            CustomerScreen(
+                viewModel = rentalViewModel,
+                onNavigateUp = { navController.popBackStack() },
+                onNavigateToAddEditCustomer = { customerId ->
+                    if (customerId == null) {
+                        navController.navigate("rental/customers/add")
+                    } else {
+                        navController.navigate("rental/customers/edit/$customerId")
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = "rental/customers/add"
+        ) {
+            AddEditCustomerScreen(
+                viewModel = rentalViewModel,
+                customerId = null,
+                onNavigateUp = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "rental/customers/edit/{customerId}",
+            arguments = listOf(navArgument("customerId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            AddEditCustomerScreen(
+                viewModel = rentalViewModel,
+                customerId = backStackEntry.arguments?.getString("customerId"),
+                onNavigateUp = { navController.popBackStack() }
             )
         }
 
@@ -389,14 +439,12 @@ fun BumdesApp(
                         }
                     }
                 },
-                // ✅ --- HUBUNGKAN TOMBOL DENGAN NAVIGASI ---
                 onNavigateToGuide = {
                     navController.navigate("user_guide")
                 }
             )
         }
 
-        // ✅ --- TAMBAHKAN COMPOSABLE BARU UNTUK PANDUAN ---
         composable("user_guide") {
             UserGuideScreen(onNavigateUp = { navController.popBackStack() })
         }
@@ -488,7 +536,6 @@ fun BumdesApp(
                 userRole = userProfile?.role ?: "pengurus",
                 onAddAssetClick = { navController.navigate("add_asset") },
                 onItemClick = { asset ->
-                    // <-- PERUBAHAN LOGIKA NAVIGASI DI SINI
                     if (asset.category == "Inventaris Agribisnis") {
                         navController.navigate("edit_agri_inventory/${asset.id}")
                     } else {
@@ -858,7 +905,6 @@ fun BumdesApp(
             AgriSaleReportScreen(
                 viewModel = agriViewModel,
                 onNavigateUp = { navController.popBackStack() },
-                // ✅ --- TAMBAHKAN NAVIGASI KE DETAIL SCREEN ---
                 onSaleClick = { sale ->
                     val saleJson = Gson().toJson(sale)
                     navController.navigate("agri_sale_detail/$saleJson")
@@ -883,7 +929,6 @@ fun BumdesApp(
             }
         }
 
-        // --- Rute Fitur Siklus Produksi ---
         composable("production_cycle_list") {
             val agriCycleViewModel: AgriCycleViewModel = viewModel(factory = agriCycleViewModelFactory)
             val activeUnitUsaha by authViewModel.activeUnitUsaha.collectAsStateWithLifecycle()
@@ -932,12 +977,11 @@ fun BumdesApp(
                 val inventoryToEdit by agriInventoryViewModel.getInventoryById(inventoryId)
                     .collectAsStateWithLifecycle(initialValue = null)
 
-                // Tampilkan layar hanya jika data sudah berhasil diambil
                 inventoryToEdit?.let {
                     AddAgriInventoryScreen(
                         inventoryToEdit = it,
                         viewModel = agriInventoryViewModel,
-                        activeUnitUsaha = null, // Tidak perlu saat edit
+                        activeUnitUsaha = null,
                         onSaveComplete = { navController.popBackStack() },
                         onNavigateUp = { navController.popBackStack() }
                     )
@@ -1026,14 +1070,16 @@ fun BumdesApp(
                 onNavigateToEditItem = { itemId ->
                     navController.navigate("edit_rental_item/$itemId")
                 },
-                onNavigateToHistory = { navController.navigate("rental_history_screen") }
+                onNavigateToHistory = { navController.navigate("rental_history_screen") },
+                onNavigateToCustomers = { navController.navigate("rental/customers") } // Tambahkan parameter ini
             )
         }
+
         composable("add_rental_item") {
             val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
             AddEditRentalItemScreen(
                 viewModel = rentalViewModel,
-                itemToEdit = null, // Mode tambah, jadi itemToEdit adalah null
+                itemToEdit = null,
                 onNavigateUp = { navController.popBackStack() }
             )
         }
@@ -1046,15 +1092,12 @@ fun BumdesApp(
             if (itemId != null) {
                 val rentalViewModel: RentalViewModel = viewModel(factory = rentalViewModelFactory)
 
-                // ✅ CARA MENCARI ITEM YANG BENAR
                 val uiState by rentalViewModel.uiState.collectAsStateWithLifecycle()
 
-                // Menggunakan remember agar pencarian tidak dijalankan terus menerus
                 val itemToEdit = remember(uiState.rentalItems, itemId) {
                     uiState.rentalItems.find { it.id == itemId }
                 }
 
-                // Hanya tampilkan layar jika item sudah ditemukan
                 itemToEdit?.let {
                     AddEditRentalItemScreen(
                         viewModel = rentalViewModel,

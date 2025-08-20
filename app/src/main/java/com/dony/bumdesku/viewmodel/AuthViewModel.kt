@@ -43,7 +43,8 @@ class AuthViewModel(
     private val agriRepository: AgriRepository,
     private val agriCycleRepository: AgriCycleRepository,
     private val fixedAssetRepository: FixedAssetRepository,
-    private val rentalRepository: RentalRepository
+    private val rentalRepository: RentalRepository,
+    private val customerRepository: CustomerRepository
 ) : ViewModel() {
 
     private val auth: FirebaseAuth = Firebase.auth
@@ -98,6 +99,7 @@ class AuthViewModel(
             _allUnitUsahaList.value.forEach { unit ->
                 if(unit.id.isNotBlank()) {
                     activeListeners.addAll(rentalRepository.syncDataForUnit(unit.id))
+                    activeListeners.add(customerRepository.syncDataForUnit(unit.id)) // Sinkronkan data pelanggan
                 }
             }
         } catch (e: Exception) {
@@ -137,6 +139,7 @@ class AuthViewModel(
                             activeListeners.add(fixedAssetRepository.syncAssetsForUser(profile.managedUnitUsahaIds))
                             profile.managedUnitUsahaIds.forEach { unitId ->
                                 activeListeners.addAll(rentalRepository.syncDataForUnit(unitId))
+                                activeListeners.add(customerRepository.syncDataForUnit(unitId)) // Sinkronkan data pelanggan
                             }
                         }
 

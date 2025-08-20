@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.RentalItem
 import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.repository.RentalRepository
+import com.dony.bumdesku.repository.CustomerRepository
+import com.dony.bumdesku.data.Customer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -18,6 +20,7 @@ import com.dony.bumdesku.util.BluetoothPrinterService
 data class RentalUiState(
     val isLoading: Boolean = true,
     val rentalItems: List<RentalItem> = emptyList(),
+    val customers: List<Customer> = emptyList(),
     val activeTransactions: List<RentalTransaction> = emptyList(),
     val completedTransactions: List<RentalTransaction> = emptyList(),
     val errorMessage: String? = null,
@@ -33,6 +36,7 @@ sealed class RentalSaveState {
 
 class RentalViewModel(
     private val rentalRepository: RentalRepository,
+    private val customerRepository: CustomerRepository,
     private val authViewModel: AuthViewModel,
     private val bluetoothPrinterService: BluetoothPrinterService
 ) : ViewModel() {
@@ -56,12 +60,11 @@ class RentalViewModel(
         } else {
             combine(
                 rentalRepository.getRentalItems(unit.id),
+                customerRepository.getCustomers(unit.id), // Ambil data pelanggan
                 rentalRepository.getRentalTransactions(unit.id)
-            ) { items, transactions ->
-                Log.d("RentalViewModel", "Data diterima dari Room: ${items.size} item, ${transactions.size} transaksi")
+            ) { items, customers, transactions ->
+                Log.d("RentalViewModel", "Data diterima: ${items.size} item, ${customers.size} pelanggan, ${transactions.size} transaksi")
 
-                // --- Perbaikan di sini ---
-                // Pisahkan transaksi aktif dari yang sudah selesai
                 val active = transactions.filter { it.status == "Disewa" || it.status == "Dipesan" }
                 val completed = transactions.filter { it.status == "Selesai" }
 
@@ -75,11 +78,11 @@ class RentalViewModel(
                         .sumOf { it.quantity }
                     item.id to rentedQty
                 }
-                // --- Akhir perbaikan ---
 
                 RentalUiState(
                     isLoading = false,
                     rentalItems = items,
+                    customers = customers, // Set daftar pelanggan
                     activeTransactions = active,
                     completedTransactions = completed,
                     rentedStockMap = rentedStockMap
@@ -92,6 +95,31 @@ class RentalViewModel(
         initialValue = RentalUiState(isLoading = true)
     )
 
+    // Fungsi baru untuk manajemen pelanggan
+    fun saveCustomer(customer: Customer) = viewModelScope.launch {
+        _saveState.value = RentalSaveState.LOADING
+        try {
+            val unitId = activeUnitUsaha.value?.id
+            if (unitId != null) {
+                customerRepository.saveCustomer(customer.copy(unitUsahaId = unitId))
+                _saveState.value = RentalSaveState.SUCCESS
+            } else {
+                throw IllegalStateException("Unit Usaha tidak aktif.")
+            }
+        } catch (e: Exception) {
+            _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menyimpan pelanggan.")
+        }
+    }
+
+    fun deleteCustomer(customer: Customer) = viewModelScope.launch {
+        _saveState.value = RentalSaveState.LOADING
+        try {
+            customerRepository.deleteCustomer(customer)
+            _saveState.value = RentalSaveState.SUCCESS
+        } catch (e: Exception) {
+            _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menghapus pelanggan.")
+        }
+    }
 
     fun saveItem(item: RentalItem) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
@@ -215,7 +243,7 @@ class RentalViewModel(
         builder.append("Sewa dari: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.rentalDate))}\n")
         builder.append("Selesai pada: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.returnDate ?: 0L))}\n")
         builder.append("--------------------------------\n")
-        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\\n")
+        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\n")
         if (transaction.notesOnReturn.isNotBlank()) {
             builder.append("Catatan: ${transaction.notesOnReturn}\n")
         }

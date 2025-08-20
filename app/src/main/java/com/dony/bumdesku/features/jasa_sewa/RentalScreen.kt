@@ -36,7 +36,8 @@ fun RentalScreen(
     onNavigateToAddItem: () -> Unit,
     onNavigateToCreateTransaction: () -> Unit,
     onNavigateToEditItem: (String) -> Unit,
-    onNavigateToHistory: () -> Unit
+    onNavigateToHistory: () -> Unit,
+    onNavigateToCustomers: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val dueTransactions by viewModel.dueTransactions.collectAsStateWithLifecycle()
@@ -72,6 +73,10 @@ fun RentalScreen(
                     }
                 },
                 actions = {
+
+                    IconButton(onClick = { onNavigateToCustomers() }) {
+                        Icon(Icons.Default.PeopleAlt, contentDescription = "Daftar Pelanggan")
+                    }
                     IconButton(onClick = onNavigateToHistory) {
                         Icon(Icons.Default.History, contentDescription = "Riwayat Sewa")
                     }

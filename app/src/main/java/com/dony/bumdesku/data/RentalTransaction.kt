@@ -21,7 +21,8 @@ data class RentalTransaction(
     val status: String = "",
     val notesOnReturn: String = "",
     val unitUsahaId: String = "",
-    val userId: String = ""
+    val userId: String = "",
+    val customerId: String = ""
 ) {
 
     @Ignore
