@@ -239,10 +239,11 @@ class RentalRepository(
             firestore.collection("rental_transactions").document(transaction.id).set(updatedTransaction).await()
 
             val updatedItem = itemToReturn.copy(
-                stockBaik = (itemToReturn.stockBaik - transaction.quantity) + (returnedConditions["Baik"] ?: 0),
+                stockBaik = itemToReturn.stockBaik + (returnedConditions["Baik"] ?: 0),
                 stockRusakRingan = itemToReturn.stockRusakRingan + (returnedConditions["Rusak Ringan"] ?: 0),
                 stockPerluPerbaikan = itemToReturn.stockPerluPerbaikan + (returnedConditions["Perlu Perbaikan"] ?: 0)
             )
+            rentalDao.updateRentalItem(updatedItem)
             firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
         }
     }
