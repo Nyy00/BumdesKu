@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
         val agriRepository = AgriRepository(agriDao, transactionRepository, accountRepository)
         val agriCycleRepository = AgriCycleRepository(cycleDao, transactionRepository)
         val fixedAssetRepository = FixedAssetRepository(fixedAssetDao)
-        val rentalRepository = RentalRepository(rentalDao, transactionRepository, accountRepository)
+        val rentalRepository = RentalRepository(rentalDao, transactionRepository, accountRepository, debtRepository)
         val customerRepository = CustomerRepository(customerDao)
 
         // Inisialisasi ViewModel Factories

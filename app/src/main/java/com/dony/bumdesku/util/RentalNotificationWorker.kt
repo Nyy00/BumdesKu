@@ -13,7 +13,8 @@ import com.dony.bumdesku.data.UserProfile
 import com.dony.bumdesku.repository.AccountRepository
 import com.dony.bumdesku.repository.RentalRepository
 import com.dony.bumdesku.repository.TransactionRepository
-import com.dony.bumdesku.R // Pastikan Anda memiliki resource string (R.string.app_name)
+import com.dony.bumdesku.repository.DebtRepository
+import com.dony.bumdesku.R
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -53,10 +54,14 @@ class RentalNotificationWorker(
             return Result.success()
         }
 
+        // Perbaikan: Buat instance DebtRepository dan teruskan ke RentalRepository
+        val debtRepository = DebtRepository(database.debtDao())
+
         val rentalRepository = RentalRepository(
             rentalDao = database.rentalDao(),
             transactionRepository = TransactionRepository(database.transactionDao()),
-            accountRepository = AccountRepository(database.accountDao())
+            accountRepository = AccountRepository(database.accountDao()),
+            debtRepository = debtRepository // Tambahkan baris ini
         )
 
         createNotificationChannel()

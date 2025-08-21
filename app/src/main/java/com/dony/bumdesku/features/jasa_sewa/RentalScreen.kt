@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dony.bumdesku.data.PaymentStatus
 import com.dony.bumdesku.data.RentalItem
 import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
@@ -27,6 +28,7 @@ import com.dony.bumdesku.viewmodel.RentalViewModel
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +50,9 @@ fun RentalScreen(
     var transactionToComplete by remember { mutableStateOf<RentalTransaction?>(null) }
     var itemToDelete by remember { mutableStateOf<RentalItem?>(null) }
     var itemToRepair by remember { mutableStateOf<RentalItem?>(null) }
+
+    // State untuk dialog pelunasan
+    var transactionToPay by remember { mutableStateOf<RentalTransaction?>(null) }
 
     LaunchedEffect(saveState) {
         when (saveState) {
@@ -116,7 +121,6 @@ fun RentalScreen(
                     .fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // --- PANGGIL NOTIFIKASI DI SINI ---
                 item {
                     RentalNotificationView(dueTransactions)
                 }
@@ -150,7 +154,8 @@ fun RentalScreen(
                     items(uiState.activeTransactions) { transaction ->
                         RentalTransactionView(
                             transaction = transaction,
-                            onCompleteClick = { transactionToComplete = transaction }
+                            onCompleteClick = { transactionToComplete = transaction },
+                            onPayClick = { transactionToPay = transaction }
                         )
                     }
                 }
@@ -183,8 +188,8 @@ fun RentalScreen(
         CompleteRentalDialog(
             transaction = trx,
             onDismiss = { transactionToComplete = null },
-            onConfirm = { returnedConditions, damageCost, notes ->
-                viewModel.completeRental(trx, returnedConditions, damageCost, notes)
+            onConfirm = { returnedConditions, damageCost, notes, remainingPayment ->
+                viewModel.completeRental(trx, returnedConditions, damageCost, notes, remainingPayment)
                 transactionToComplete = null
             }
         )
@@ -197,6 +202,18 @@ fun RentalScreen(
             onConfirmRepair = { quantity, fromCondition, repairCost ->
                 viewModel.repairItem(item, quantity, fromCondition, repairCost)
                 itemToRepair = null
+            }
+        )
+    }
+
+    // Dialog baru untuk pelunasan pembayaran
+    transactionToPay?.let { trx ->
+        PaymentDialog(
+            transaction = trx,
+            onDismiss = { transactionToPay = null },
+            onConfirm = { paymentAmount ->
+                viewModel.processPayment(trx.id, paymentAmount)
+                transactionToPay = null
             }
         )
     }
@@ -256,7 +273,7 @@ fun RentalItemView(
                     Text(
                         "Sedang Disewakan: $rentedQuantity",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Red // Opsional, agar lebih menonjol
+                        color = Color.Red
                     )
                 }
                 if (item.stockRusakRingan > 0) {
@@ -280,29 +297,73 @@ fun RentalItemView(
     }
 }
 
+
 @Composable
-fun RentalTransactionView(transaction: RentalTransaction, onCompleteClick: () -> Unit) {
+fun RentalTransactionView(
+    transaction: RentalTransaction,
+    onCompleteClick: () -> Unit,
+    onPayClick: () -> Unit // Tambahkan parameter ini
+) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-    Card(modifier = Modifier
-        .fillMaxWidth()
-        .padding(vertical = 4.dp)) {
+    val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when (transaction.paymentStatus) {
+                PaymentStatus.LUNAS -> Color(0xFFE8F5E9)
+                PaymentStatus.DP -> Color(0xFFE3F2FD)
+                PaymentStatus.BELUM_LUNAS -> Color(0xFFFBE9E7)
+            }
+        )
+    ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Penyewa: ${transaction.customerName}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text("Barang: ${transaction.itemName} (x${transaction.quantity})", style = MaterialTheme.typography.bodyMedium)
             Text("Wajib Kembali: ${dateFormat.format(Date(transaction.expectedReturnDate))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            Button(onClick = onCompleteClick, modifier = Modifier.align(Alignment.End)) {
-                Text("Selesaikan (Kembali)")
+            Text("Status Pembayaran: ${transaction.paymentStatus.name.replace("_", " ")}",
+                style = MaterialTheme.typography.bodySmall,
+                color = when(transaction.paymentStatus) {
+                    PaymentStatus.LUNAS -> Color.Green
+                    PaymentStatus.DP -> Color.Blue
+                    else -> Color.Red
+                }
+            )
+
+            // Hitung dan tampilkan sisa pembayaran
+            val sisa = transaction.totalPrice - transaction.downPayment
+            if (transaction.paymentStatus != PaymentStatus.LUNAS && sisa > 0) {
+                Text("Sisa Pembayaran: ${currencyFormat.format(sisa)}", color = Color.Red, fontWeight = FontWeight.SemiBold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (transaction.paymentStatus != PaymentStatus.LUNAS) {
+                    OutlinedButton(onClick = onPayClick) {
+                        Text("Lunasi")
+                    }
+                }
+                Button(onClick = onCompleteClick) {
+                    Text("Selesaikan (Kembali)")
+                }
             }
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompleteRentalDialog(
     transaction: RentalTransaction,
     onDismiss: () -> Unit,
-    onConfirm: (returnedConditions: Map<String, Int>, damageCost: Double, notes: String) -> Unit
+    onConfirm: (returnedConditions: Map<String, Int>, damageCost: Double, notes: String, remainingPayment: Double) -> Unit
 ) {
     var baikCount by remember { mutableStateOf(transaction.quantity.toString()) }
     var rusakRinganCount by remember { mutableStateOf("0") }
@@ -315,6 +376,9 @@ fun CompleteRentalDialog(
             (perluPerbaikanCount.toIntOrNull() ?: 0)
 
     val isCountValid = totalReturned == transaction.quantity
+
+    val remainingAmount = transaction.totalPrice - transaction.downPayment
+    var finalPaymentAmountText by remember { mutableStateOf(if (remainingAmount > 0) remainingAmount.toLong().toString() else "0") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -333,6 +397,18 @@ fun CompleteRentalDialog(
                                 "Total jumlah harus sama dengan ${transaction.quantity}! (Saat ini: $totalReturned)",
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        // Tambahkan input untuk sisa pembayaran jika ada
+                        if (remainingAmount > 0) {
+                            OutlinedTextField(
+                                value = finalPaymentAmountText,
+                                onValueChange = { finalPaymentAmountText = it.filter { c -> c.isDigit() } },
+                                label = { Text("Jumlah Pembayaran Sisa") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                visualTransformation = ThousandSeparatorVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
 
@@ -366,7 +442,8 @@ fun CompleteRentalDialog(
                     onConfirm(
                         returnedConditions,
                         damageCost.toDoubleOrNull() ?: 0.0,
-                        notes
+                        notes,
+                        finalPaymentAmountText.toDoubleOrNull() ?: 0.0
                     )
                 },
                 enabled = isCountValid
@@ -379,6 +456,7 @@ fun CompleteRentalDialog(
         }
     )
 }
+
 @Composable
 fun ConditionInputRow(label: String, value: String, onValueChange: (String) -> Unit) {
     OutlinedTextField(
@@ -387,5 +465,53 @@ fun ConditionInputRow(label: String, value: String, onValueChange: (String) -> U
         label = { Text(label) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth()
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PaymentDialog(
+    transaction: RentalTransaction,
+    onDismiss: () -> Unit,
+    onConfirm: (paymentAmount: Double) -> Unit
+) {
+    val remainingAmount = transaction.totalPrice - transaction.downPayment
+    val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
+    var paymentAmountText by remember { mutableStateOf(if (remainingAmount > 0) remainingAmount.toLong().toString() else "0") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Pelunasan Transaksi") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Penyewa: ${transaction.customerName}", style = MaterialTheme.typography.bodyLarge)
+                Text("Barang: ${transaction.itemName}", style = MaterialTheme.typography.bodyLarge)
+                Text("Sisa Pembayaran: ${currencyFormat.format(remainingAmount)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                OutlinedTextField(
+                    value = paymentAmountText,
+                    onValueChange = { paymentAmountText = it.filter { c -> c.isDigit() } },
+                    label = { Text("Jumlah Pembayaran") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    visualTransformation = ThousandSeparatorVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amountDouble = paymentAmountText.toDoubleOrNull() ?: 0.0
+                    if (amountDouble > 0) {
+                        onConfirm(amountDouble)
+                    }
+                },
+                enabled = (paymentAmountText.toDoubleOrNull() ?: 0.0) > 0
+            ) {
+                Text("Konfirmasi")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
     )
 }

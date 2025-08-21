@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class DebtRepository(private val debtDao: DebtDao) {
 
@@ -25,7 +26,6 @@ class DebtRepository(private val debtDao: DebtDao) {
     fun getPayableById(id: String): Flow<Payable?> = debtDao.getPayableById(id)
     fun getReceivableById(id: String): Flow<Receivable?> = debtDao.getReceivableById(id)
 
-    // --- FUNGSI SINKRONISASI BARU ---
     fun syncPayablesForUser(managedUnitIds: List<String>): ListenerRegistration {
         return firestore.collection("payables").whereIn("unitUsahaId", managedUnitIds.take(30))
             .addSnapshotListener { snapshots, e ->
@@ -54,11 +54,6 @@ class DebtRepository(private val debtDao: DebtDao) {
             }
     }
 
-    /**
-     * ✅ FUNGSI BANTUAN YANG DIPERBAIKI
-     * Fungsi ini sekarang menerima 'clazz' untuk mengetahui tipe data apa
-     * yang harus dibuat (Payable atau Receivable).
-     */
     private inline fun <T : Any> handleFirestoreUpdate(
         e: Exception?,
         snapshots: com.google.firebase.firestore.QuerySnapshot?,
@@ -73,7 +68,6 @@ class DebtRepository(private val debtDao: DebtDao) {
         scope.launch {
             val firestoreData = snapshots?.mapNotNull { doc ->
                 val obj = doc.toObject(clazz)
-                // Set ID secara manual setelah objek dibuat
                 when (obj) {
                     is Payable -> obj.id = doc.id
                     is Receivable -> obj.id = doc.id
@@ -85,8 +79,16 @@ class DebtRepository(private val debtDao: DebtDao) {
         }
     }
 
+    suspend fun deleteReceivableById(id: String) {
+        withContext(Dispatchers.IO) {
+            debtDao.deleteReceivableById(id)
 
-    // --- OPERASI CRUD (Tidak ada perubahan di sini) ---
+            if (id.isNotBlank()) {
+                firestore.collection("receivables").document(id).delete().await()
+            }
+        }
+    }
+
     suspend fun insert(payable: Payable) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
         val docRef = firestore.collection("payables").document()
@@ -107,14 +109,17 @@ class DebtRepository(private val debtDao: DebtDao) {
 
     suspend fun insert(receivable: Receivable) {
         val userId = auth.currentUser?.uid ?: throw Exception("User tidak login")
-        val docRef = firestore.collection("receivables").document()
-        val newReceivable = receivable.copy(id = docRef.id, userId = userId)
-        docRef.set(newReceivable).await()
+        val finalReceivable = receivable.copy(userId = userId)
+
+        firestore.collection("receivables").document(finalReceivable.id).set(finalReceivable).await()
+        debtDao.insertReceivable(finalReceivable)
     }
 
     suspend fun update(receivable: Receivable) {
         if (receivable.id.isBlank()) return
+
         firestore.collection("receivables").document(receivable.id).set(receivable).await()
+        debtDao.updateReceivable(receivable)
     }
 
     suspend fun delete(receivable: Receivable) {

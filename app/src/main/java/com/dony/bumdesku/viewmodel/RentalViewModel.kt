@@ -8,6 +8,7 @@ import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.repository.RentalRepository
 import com.dony.bumdesku.repository.CustomerRepository
 import com.dony.bumdesku.data.Customer
+import com.dony.bumdesku.data.PaymentStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -60,7 +61,7 @@ class RentalViewModel(
         } else {
             combine(
                 rentalRepository.getRentalItems(unit.id),
-                customerRepository.getCustomers(unit.id), // Ambil data pelanggan
+                customerRepository.getCustomers(unit.id),
                 rentalRepository.getRentalTransactions(unit.id)
             ) { items, customers, transactions ->
                 Log.d("RentalViewModel", "Data diterima: ${items.size} item, ${customers.size} pelanggan, ${transactions.size} transaksi")
@@ -68,9 +69,8 @@ class RentalViewModel(
                 val active = transactions.filter { it.status == "Disewa" || it.status == "Dipesan" }
                 val completed = transactions.filter { it.status == "Selesai" }
 
-                // Cek transaksi yang jatuh tempo
                 val due = active.filter { it.isOverdue() || it.isDueSoon() }
-                _dueTransactions.value = due // Perbarui StateFlow notifikasi
+                _dueTransactions.value = due
 
                 val rentedStockMap = items.associate { item ->
                     val rentedQty = active
@@ -82,7 +82,7 @@ class RentalViewModel(
                 RentalUiState(
                     isLoading = false,
                     rentalItems = items,
-                    customers = customers, // Set daftar pelanggan
+                    customers = customers,
                     activeTransactions = active,
                     completedTransactions = completed,
                     rentedStockMap = rentedStockMap
@@ -95,7 +95,6 @@ class RentalViewModel(
         initialValue = RentalUiState(isLoading = true)
     )
 
-    // Fungsi baru untuk manajemen pelanggan
     fun saveCustomer(customer: Customer) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
@@ -156,6 +155,7 @@ class RentalViewModel(
         return rentalRepository.getRentalTransactionById(id)
     }
 
+    // Perbaikan: Fungsi ini sekarang hanya menerima satu parameter, yaitu objek RentalTransaction
     fun createRental(transaction: RentalTransaction) {
         viewModelScope.launch {
             _saveState.value = RentalSaveState.LOADING
@@ -165,6 +165,16 @@ class RentalViewModel(
             } catch (e: Exception) {
                 _saveState.value = RentalSaveState.ERROR(e.message ?: "Terjadi kesalahan")
             }
+        }
+    }
+
+    fun processPayment(transactionId: String, paymentAmount: Double) = viewModelScope.launch {
+        _saveState.value = RentalSaveState.LOADING
+        try {
+            rentalRepository.processPayment(transactionId, paymentAmount)
+            _saveState.value = RentalSaveState.SUCCESS
+        } catch (e: Exception) {
+            _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal memproses pembayaran.")
         }
     }
 
@@ -180,11 +190,12 @@ class RentalViewModel(
         transaction: RentalTransaction,
         returnedConditions: Map<String, Int>,
         damageCost: Double,
-        notes: String
+        notes: String,
+        remainingPayment: Double
     ) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
-            rentalRepository.processReturn(transaction, returnedConditions, damageCost, notes)
+            rentalRepository.processReturn(transaction, returnedConditions, damageCost, notes, remainingPayment)
             _saveState.value = RentalSaveState.SUCCESS
         } catch (e: Exception) {
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menyelesaikan transaksi.")

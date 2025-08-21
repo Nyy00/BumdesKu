@@ -5,6 +5,12 @@ import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import com.google.firebase.firestore.Exclude
 
+enum class PaymentStatus {
+    LUNAS,
+    BELUM_LUNAS,
+    DP
+}
+
 @Entity(tableName = "rental_transactions")
 data class RentalTransaction(
     @PrimaryKey
@@ -22,9 +28,10 @@ data class RentalTransaction(
     val notesOnReturn: String = "",
     val unitUsahaId: String = "",
     val userId: String = "",
-    val customerId: String = ""
+    val customerId: String = "",
+    val paymentStatus: PaymentStatus = PaymentStatus.BELUM_LUNAS,
+    val downPayment: Double = 0.0
 ) {
-
     @Ignore
     @Exclude
     fun isOverdue(): Boolean {

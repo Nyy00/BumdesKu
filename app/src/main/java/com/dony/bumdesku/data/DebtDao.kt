@@ -20,7 +20,7 @@ interface DebtDao {
     fun getAllPayables(): Flow<List<Payable>>
 
     @Query("SELECT * FROM payables WHERE id = :id")
-    fun getPayableById(id: String): Flow<Payable?> // ✅ Pastikan parameter String
+    fun getPayableById(id: String): Flow<Payable?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllPayables(payables: List<Payable>)
@@ -42,11 +42,14 @@ interface DebtDao {
     fun getAllReceivables(): Flow<List<Receivable>>
 
     @Query("SELECT * FROM receivables WHERE id = :id")
-    fun getReceivableById(id: String): Flow<Receivable?> // ✅ Pastikan parameter String
+    fun getReceivableById(id: String): Flow<Receivable?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllReceivables(receivables: List<Receivable>)
 
     @Query("DELETE FROM receivables")
     suspend fun deleteAllReceivables()
+
+    @Query("DELETE FROM receivables WHERE id = :id")
+    suspend fun deleteReceivableById(id: String)
 }

@@ -18,7 +18,8 @@ import kotlin.math.ceil
 class RentalRepository(
     private val rentalDao: RentalDao,
     private val transactionRepository: TransactionRepository,
-    private val accountRepository: AccountRepository
+    private val accountRepository: AccountRepository,
+    private val debtRepository: DebtRepository
 ) {
     private val firestore = Firebase.firestore
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -89,7 +90,6 @@ class RentalRepository(
             val itemToRent = rentalDao.getRentalItemById(transaction.rentalItemId)
                 ?: throw IllegalStateException("Item tidak ditemukan di database lokal.")
 
-            // Panggil fungsi yang baru kita buat untuk validasi ketersediaan
             val availableStockOnDate = checkAvailability(
                 transaction.rentalItemId,
                 transaction.unitUsahaId,
@@ -100,20 +100,134 @@ class RentalRepository(
                 throw IllegalStateException("Stok tidak mencukupi untuk tanggal yang dipilih. Sisa: $availableStockOnDate")
             }
 
-            // --- BAGIAN BARU: MENGURANGI STOK SEBELUM MEMBUAT TRANSAKSI ---
             val newStockBaik = itemToRent.stockBaik - transaction.quantity
             val updatedItem = itemToRent.copy(stockBaik = newStockBaik)
 
-            // Perbarui item di database lokal (Room)
             rentalDao.updateRentalItem(updatedItem)
-
-            // Perbarui item di Firestore
             firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
 
-            // Sekarang, buat transaksi sewa
-            val finalTransaction = transaction.copy(status = "Dipesan")
-            firestore.collection("rental_transactions").add(finalTransaction).await()
+            // --- Logika Akuntansi & Piutang ---
+            val allAccounts = accountRepository.allAccounts.first()
+            val kasAccount = allAccounts.find { it.accountNumber == "111" }
+            val piutangAccount = allAccounts.find { it.accountNumber == "113" } // Pastikan akun piutang Anda 113
+            val pendapatanSewaAccount = allAccounts.find { it.accountNumber == "413" }
 
+            if (kasAccount == null || piutangAccount == null || pendapatanSewaAccount == null) {
+                throw IllegalStateException("Akun Kas (111), Piutang Usaha (113), atau Pendapatan Jasa Sewa (413) tidak ditemukan.")
+            }
+
+            // Jurnal 1: Mencatat piutang sebagai pendapatan (Piutang Usaha di Debit, Pendapatan Jasa Sewa di Kredit)
+            val piutangTransaction = Transaction(
+                description = "Piutang sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                amount = transaction.totalPrice,
+                date = transaction.rentalDate,
+                debitAccountId = piutangAccount.id,
+                creditAccountId = pendapatanSewaAccount.id,
+                debitAccountName = piutangAccount.accountName,
+                creditAccountName = pendapatanSewaAccount.accountName,
+                unitUsahaId = transaction.unitUsahaId,
+                userId = transaction.userId
+            )
+            transactionRepository.insert(piutangTransaction)
+
+            // Jurnal 2: Mencatat penerimaan uang muka (Kas Tunai di Debit, Piutang Usaha di Kredit)
+            if (transaction.downPayment > 0) {
+                val dpTransaction = Transaction(
+                    description = "Penerimaan DP sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                    amount = transaction.downPayment,
+                    date = transaction.rentalDate,
+                    debitAccountId = kasAccount.id,
+                    creditAccountId = piutangAccount.id,
+                    debitAccountName = kasAccount.accountName,
+                    creditAccountName = piutangAccount.accountName,
+                    unitUsahaId = transaction.unitUsahaId,
+                    userId = transaction.userId
+                )
+                transactionRepository.insert(dpTransaction)
+            }
+
+            // --- Bagian yang hilang: Memastikan Receivable juga tercatat di awal
+            val sisaPiutang = transaction.totalPrice - transaction.downPayment
+            if (sisaPiutang > 0) {
+                val receivableEntry = Receivable(
+                    id = transaction.id,
+                    userId = transaction.userId,
+                    unitUsahaId = transaction.unitUsahaId,
+                    contactName = transaction.customerName,
+                    description = "Sisa pembayaran sewa ${transaction.itemName}",
+                    amount = sisaPiutang,
+                    transactionDate = transaction.rentalDate,
+                    dueDate = transaction.expectedReturnDate,
+                    isPaid = false
+                )
+                debtRepository.insert(receivableEntry)
+            }
+
+            firestore.collection("rental_transactions").document(transaction.id).set(transaction).await()
+        }
+    }
+
+    suspend fun processPayment(
+        transactionId: String,
+        paymentAmount: Double
+    ) {
+        withContext(Dispatchers.IO) {
+            val transaction = rentalDao.getRentalTransactionById(transactionId).first()
+                ?: throw IllegalStateException("Transaksi tidak ditemukan.")
+
+            val sisaPiutang = transaction.totalPrice - transaction.downPayment
+            if (paymentAmount > sisaPiutang) {
+                throw IllegalStateException("Jumlah pembayaran melebihi sisa piutang.")
+            }
+
+            val newDownPayment = transaction.downPayment + paymentAmount
+            val newPaymentStatus = if (newDownPayment >= transaction.totalPrice) {
+                PaymentStatus.LUNAS
+            } else {
+                PaymentStatus.DP
+            }
+
+            // 1. Buat Jurnal Pembayaran (Kas di Debit, Piutang di Kredit)
+            val allAccounts = accountRepository.allAccounts.first()
+            val kasAccount = allAccounts.find { it.accountNumber == "111" }
+            val piutangAccount = allAccounts.find { it.accountNumber == "113" }
+
+            if (kasAccount == null || piutangAccount == null) {
+                throw IllegalStateException("Akun Kas (111) atau Piutang Usaha (113) tidak ditemukan.")
+            }
+
+            val paymentTransaction = Transaction(
+                description = "Pembayaran sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                amount = paymentAmount,
+                date = System.currentTimeMillis(),
+                debitAccountId = kasAccount.id,
+                creditAccountId = piutangAccount.id,
+                debitAccountName = kasAccount.accountName,
+                creditAccountName = piutangAccount.accountName,
+                unitUsahaId = transaction.unitUsahaId,
+                userId = transaction.userId
+            )
+            transactionRepository.insert(paymentTransaction)
+
+            // 2. Perbarui Receivable di DebtRepository
+            val sisaPiutangBaru = transaction.totalPrice - newDownPayment
+            if (sisaPiutangBaru <= 0.0) { // Jika sudah lunas
+                debtRepository.deleteReceivableById(transactionId)
+            } else {
+                val updatedReceivable = debtRepository.getReceivableById(transactionId).first()?.copy(
+                    amount = sisaPiutangBaru
+                )
+                if (updatedReceivable != null) {
+                    debtRepository.update(updatedReceivable)
+                }
+            }
+
+            // 3. Perbarui RentalTransaction di Firestore
+            val updatedRentalTransaction = transaction.copy(
+                paymentStatus = newPaymentStatus,
+                downPayment = newDownPayment
+            )
+            firestore.collection("rental_transactions").document(transactionId).set(updatedRentalTransaction).await()
         }
     }
 
@@ -166,55 +280,55 @@ class RentalRepository(
         transaction: RentalTransaction,
         returnedConditions: Map<String, Int>,
         damageCost: Double,
-        notes: String
+        notes: String,
+        remainingPayment: Double
     ) {
         withContext(Dispatchers.IO) {
             val returnTimestamp = System.currentTimeMillis()
             val itemToReturn = rentalDao.getRentalItemById(transaction.rentalItemId)
                 ?: throw IllegalStateException("Item sewa tidak ditemukan.")
 
+            // Hitung total harga sewa, denda, dan biaya kerusakan
             val durationInMillis = returnTimestamp - transaction.rentalDate
             val durationInDays = ceil(durationInMillis / (1000.0 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
             val rentalCost = transaction.pricePerDay * transaction.quantity * durationInDays
             var lateFee = 0.0
-            val calReturn = Calendar.getInstance().apply { timeInMillis = returnTimestamp }
-            val calExpected = Calendar.getInstance().apply { timeInMillis = transaction.expectedReturnDate }
-            val isSameDayOrBefore = calReturn.get(Calendar.YEAR) < calExpected.get(Calendar.YEAR) ||
-                    (calReturn.get(Calendar.YEAR) == calExpected.get(Calendar.YEAR) &&
-                            calReturn.get(Calendar.DAY_OF_YEAR) <= calExpected.get(Calendar.DAY_OF_YEAR))
-            if (!isSameDayOrBefore) {
+            if (returnTimestamp > transaction.expectedReturnDate) {
                 val lateDurationInMillis = returnTimestamp - transaction.expectedReturnDate
                 val lateInDays = ceil(lateDurationInMillis / (1000.0 * 60 * 60 * 24)).toInt()
                 if (lateInDays > 0) {
                     lateFee = itemToReturn.lateFeePerDay * lateInDays
                 }
             }
-            val rentalAndLateFeePrice = rentalCost + lateFee
+            val totalFinalCost = rentalCost + lateFee + damageCost
 
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
+            val piutangAccount = allAccounts.find { it.accountNumber == "113" }
             val pendapatanSewaAccount = allAccounts.find { it.accountNumber == "413" }
             val pendapatanLainAccount = allAccounts.find { it.accountNumber == "421" }
 
-            if (kasAccount == null || pendapatanSewaAccount == null || pendapatanLainAccount == null) {
-                throw IllegalStateException("Akun Kas (111), Pendapatan Jasa Sewa (413), atau Pendapatan Lain (421) tidak ditemukan.")
+            if (kasAccount == null || piutangAccount == null || pendapatanSewaAccount == null || pendapatanLainAccount == null) {
+                throw IllegalStateException("Akun Kas (111), Piutang (113), Pendapatan Sewa (413), atau Pendapatan Lain (421) tidak ditemukan.")
             }
 
-            val rentalDescription = "Pendapatan sewa ${transaction.itemName} oleh ${transaction.customerName}" +
-                    if (lateFee > 0) " (termasuk denda keterlambatan)" else ""
-            val rentalFinancialTransaction = Transaction(
-                description = rentalDescription,
-                amount = rentalAndLateFeePrice,
-                date = returnTimestamp,
-                debitAccountId = kasAccount.id,
-                creditAccountId = pendapatanSewaAccount.id,
-                debitAccountName = kasAccount.accountName,
-                creditAccountName = pendapatanSewaAccount.accountName,
-                unitUsahaId = transaction.unitUsahaId,
-                userId = ""
-            )
-            transactionRepository.insert(rentalFinancialTransaction)
+            // Gunakan parameter remainingPayment yang dikirim dari UI
+            if (remainingPayment > 0) {
+                val finalPaymentTransaction = Transaction(
+                    description = "Pelunasan sisa sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                    amount = remainingPayment,
+                    date = returnTimestamp,
+                    debitAccountId = kasAccount.id,
+                    creditAccountId = piutangAccount.id,
+                    debitAccountName = kasAccount.accountName,
+                    creditAccountName = piutangAccount.accountName,
+                    unitUsahaId = transaction.unitUsahaId,
+                    userId = transaction.userId
+                )
+                transactionRepository.insert(finalPaymentTransaction)
+            }
 
+            // Catat denda jika ada
             if (damageCost > 0) {
                 val damageTransaction = Transaction(
                     description = "Denda kerusakan ${transaction.itemName} oleh ${transaction.customerName}",
@@ -225,17 +339,26 @@ class RentalRepository(
                     debitAccountName = kasAccount.accountName,
                     creditAccountName = pendapatanLainAccount.accountName,
                     unitUsahaId = transaction.unitUsahaId,
-                    userId = ""
+                    userId = transaction.userId
                 )
                 transactionRepository.insert(damageTransaction)
             }
 
+            // HANYA HAPUS piutang jika ada sisa pembayaran sebelumnya
+            if (transaction.totalPrice > transaction.downPayment) {
+                debtRepository.deleteReceivableById(transaction.id)
+            }
+
+            // Perbarui transaksi dengan data final
             val updatedTransaction = transaction.copy(
                 status = "Selesai",
                 returnDate = returnTimestamp,
-                totalPrice = rentalAndLateFeePrice + damageCost,
-                notesOnReturn = notes
+                totalPrice = totalFinalCost,
+                notesOnReturn = notes,
+                paymentStatus = PaymentStatus.LUNAS,
+                downPayment = transaction.downPayment + remainingPayment
             )
+
             firestore.collection("rental_transactions").document(transaction.id).set(updatedTransaction).await()
 
             val updatedItem = itemToReturn.copy(
