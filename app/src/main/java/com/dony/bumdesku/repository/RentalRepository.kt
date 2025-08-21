@@ -1,14 +1,18 @@
 package com.dony.bumdesku.repository
 
 import android.util.Log
+import androidx.room.util.copy
 import com.dony.bumdesku.data.*
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.firestore.snapshots
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -245,6 +249,19 @@ class RentalRepository(
 
     suspend fun updateRentalItem(item: RentalItem) {
         rentalDao.updateRentalItem(item)
+    }
+
+    fun getTransactionsForCustomer(customerId: String): Flow<List<RentalTransaction>> {
+        return firestore.collection("rental_transactions")
+            .whereEqualTo("customerId", customerId)
+            .orderBy("rentalDate", Query.Direction.DESCENDING)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { document ->
+                    val transaction = document.toObject(RentalTransaction::class.java)
+                    transaction?.copy(id = document.id)
+                }
+            }
     }
 
     suspend fun checkAvailability(itemId: String, unitUsahaId: String, startDate: Long, endDate: Long): Int {

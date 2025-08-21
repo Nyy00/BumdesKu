@@ -27,7 +27,8 @@ import com.dony.bumdesku.viewmodel.RentalViewModel
 fun CustomerScreen(
     viewModel: RentalViewModel,
     onNavigateUp: () -> Unit,
-    onNavigateToAddEditCustomer: (String?) -> Unit
+    onNavigateToAddEditCustomer: (String?) -> Unit,
+    onNavigateToCustomerHistory: (String, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
@@ -86,7 +87,8 @@ fun CustomerScreen(
                         CustomerCard(
                             customer = customer,
                             onEdit = { onNavigateToAddEditCustomer(customer.id) },
-                            onDelete = { customerToDelete = customer }
+                            onDelete = { customerToDelete = customer },
+                            onCardClick = { onNavigateToCustomerHistory(customer.id, customer.name) } // Aksi klik kartu
                         )
                     }
                 }
@@ -120,11 +122,16 @@ fun CustomerScreen(
 }
 
 @Composable
-fun CustomerCard(customer: Customer, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun CustomerCard(
+    customer: Customer,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCardClick: () -> Unit // Parameter baru untuk aksi klik pada kartu
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onEdit() }
+            .clickable { onCardClick() } // Gunakan onCardClick di sini
     ) {
         Row(
             modifier = Modifier.padding(16.dp),

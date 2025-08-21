@@ -155,6 +155,10 @@ class RentalViewModel(
         return rentalRepository.getRentalTransactionById(id)
     }
 
+    fun getTransactionsForCustomer(customerId: String): Flow<List<RentalTransaction>> {
+        return rentalRepository.getTransactionsForCustomer(customerId)
+    }
+
     // Perbaikan: Fungsi ini sekarang hanya menerima satu parameter, yaitu objek RentalTransaction
     fun createRental(transaction: RentalTransaction) {
         viewModelScope.launch {

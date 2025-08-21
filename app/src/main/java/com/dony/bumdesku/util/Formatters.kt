@@ -7,6 +7,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import java.text.DecimalFormat
 import java.text.NumberFormat
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.*
 
 class ThousandSeparatorVisualTransformation : VisualTransformation {
     private val symbols = DecimalFormat().decimalFormatSymbols
@@ -47,4 +49,14 @@ fun formatCurrency(amount: Double): String {
     val localeID = Locale("in", "ID")
     val format = NumberFormat.getCurrencyInstance(localeID)
     return format.format(amount)
+}
+
+fun formatDate(timestamp: Long): String {
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("id", "ID"))
+    return sdf.format(Date(timestamp))
+}
+
+fun formatRupiah(number: Double): String {
+    val format = NumberFormat.getCurrencyInstance(Locale("id", "ID"))
+    return format.format(number)
 }

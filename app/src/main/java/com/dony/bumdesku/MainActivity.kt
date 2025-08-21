@@ -57,6 +57,7 @@ import com.dony.bumdesku.features.jasa_sewa.RentalDetailScreen
 import androidx.navigation.navArgument
 import com.dony.bumdesku.features.jasa_sewa.AddEditCustomerScreen
 import com.dony.bumdesku.features.jasa_sewa.CustomerScreen
+import com.dony.bumdesku.features.jasa_sewa.CustomerTransactionHistoryScreen
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import com.dony.bumdesku.screens.FixedAssetListScreen
@@ -237,6 +238,26 @@ fun BumdesApp(
         }
 
         composable(
+            "customer_history/{customerId}?name={customerName}",
+            arguments = listOf(
+                navArgument("customerId") { type = NavType.StringType },
+                navArgument("customerName") {
+                    type = NavType.StringType
+                    nullable = true
+                }
+            )
+        ) { backStackEntry ->
+            val customerId = backStackEntry.arguments?.getString("customerId") ?: return@composable
+            val customerName = backStackEntry.arguments?.getString("customerName") ?: ""
+            CustomerTransactionHistoryScreen(
+                customerId = customerId,
+                customerName = customerName,
+                viewModel = rentalViewModel, // Meneruskan instance ViewModel yang sudah ada
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
             route = "rental/customers"
         ) {
             CustomerScreen(
@@ -248,6 +269,10 @@ fun BumdesApp(
                     } else {
                         navController.navigate("rental/customers/edit/$customerId")
                     }
+                },
+                // Parameter baru untuk navigasi ke riwayat pelanggan
+                onNavigateToCustomerHistory = { customerId, customerName ->
+                    navController.navigate("customer_history/$customerId?name=$customerName")
                 }
             )
         }
