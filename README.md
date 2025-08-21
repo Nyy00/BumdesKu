@@ -16,16 +16,20 @@ Banyak BUMDes di Indonesia yang masih mengandalkan pencatatan manual menggunakan
 
 Aplikasi ini dilengkapi dengan serangkaian fitur komprehensif yang mencakup hampir semua kebutuhan operasional BUMDes:
 
-#### **Manajemen Keuangan & Akuntansi**
+### Manajemen Keuangan & Akuntansi
 * **Jurnal Umum Digital:** Pencatatan semua transaksi keuangan dengan sistem *double-entry* yang akurat.
 * **Buku Besar & Neraca Saldo:** Lacak riwayat dan saldo akhir dari setiap akun secara otomatis.
 * **Laporan Keuangan Otomatis:** Hasilkan laporan Laba Rugi, Neraca (Laporan Posisi Keuangan), dan Laporan Perubahan Modal (Ekuitas) secara instan.
 * **Ekspor ke PDF:** Semua laporan keuangan dapat diekspor ke format PDF untuk dicetak atau diarsipkan.
 * **Kunci Jurnal:** Fitur khusus Manajer untuk menutup buku pada akhir periode akuntansi, menjaga integritas data yang sudah final.
 
-#### **Manajemen Operasional**
+### Manajemen Operasional
 * **Manajemen Multi-Unit Usaha:** Kelola beberapa unit usaha (misal: Toko, Agribisnis, Jasa Sewa) dalam satu aplikasi.
 * **Modul Kasir (Point of Sale):** Sistem kasir terintegrasi untuk unit usaha toko, lengkap dengan manajemen stok otomatis.
+* **Modul Jasa Sewa:**
+    * **Manajemen Transaksi Sewa:** Mencatat transaksi penyewaan barang atau aset dengan fleksibilitas.
+    * **Pengelolaan Piutang:** Kelola pembayaran uang muka (DP) dan sisa pembayaran secara otomatis, mencatatnya sebagai piutang.
+    * **Manajemen Stok Barang Sewa:** Lacak ketersediaan barang yang disewakan agar tidak terjadi tumpang tindih jadwal.
 * **Modul Agribisnis:**
     * **Siklus Produksi:** Lacak biaya dari awal tanam hingga panen untuk menghitung Harga Pokok Produksi (HPP) secara akurat.
     * **Manajemen Stok Panen & Inventaris:** Catat hasil panen dan inventaris pertanian.
@@ -33,7 +37,7 @@ Aplikasi ini dilengkapi dengan serangkaian fitur komprehensif yang mencakup hamp
 * **Manajemen Aset & Stok:** Lacak semua aset dan inventaris barang yang dimiliki BUMDes.
 * **Manajemen Utang & Piutang:** Pantau dan kelola semua utang dan piutang usaha yang sedang berjalan.
 
-#### **Administrasi & Lainnya**
+### Administrasi & Lainnya
 * **Akses Berbasis Peran (Role):**
     * **Manager:** Akses penuh ke semua data di semua unit usaha.
     * **Pengurus:** Akses terbatas hanya pada unit usaha yang ditugaskan.
@@ -71,7 +75,7 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 2.  **Clone Repository**
     ```sh
-    git clone [https://github.com/](https://github.com/)[NAMA_PENGGUNA_ANDA]/[NAMA_REPO_ANDA].git
+    git clone [https://github.com/NAMA_PENGGUNA_ANDA/NAMA_REPO_ANDA.git](https://github.com/NAMA_PENGGUNA_ANDA/NAMA_REPO_ANDA.git)
     ```
 
 3.  **Pengaturan Firebase**
@@ -95,10 +99,8 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 *(Disarankan untuk menambahkan beberapa gambar tangkapan layar di sini untuk menunjukkan tampilan aplikasi Anda, seperti Halaman Utama, Layar Kasir, atau Laporan Keuangan)*
 
 | Halaman Utama | Kasir Toko | Kasir Agribisnis | Struk Digital |
-| :-----------: | :--------: | :--------------: | :-----------: |
-| ![Tampilan Halaman Utama](app/screenshoot/home.png)| ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Agribisnis](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
-
-
+| :---: | :---: | :---: | :---: |
+| ![Tampilan Halaman Utama](app/screenshoot/home.png) | ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Agribisnis](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
 
 ---
 
