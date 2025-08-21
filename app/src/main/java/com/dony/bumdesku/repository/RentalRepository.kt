@@ -110,67 +110,85 @@ class RentalRepository(
             rentalDao.updateRentalItem(updatedItem)
             firestore.collection("rental_items").document(updatedItem.id).set(updatedItem).await()
 
-            // --- Logika Akuntansi & Piutang ---
+            // --- Logika Akuntansi & Piutang Diperbarui ---
             val allAccounts = accountRepository.allAccounts.first()
             val kasAccount = allAccounts.find { it.accountNumber == "111" }
-            val piutangAccount = allAccounts.find { it.accountNumber == "113" } // Pastikan akun piutang Anda 113
+            val piutangAccount = allAccounts.find { it.accountNumber == "113" }
             val pendapatanSewaAccount = allAccounts.find { it.accountNumber == "413" }
 
             if (kasAccount == null || piutangAccount == null || pendapatanSewaAccount == null) {
                 throw IllegalStateException("Akun Kas (111), Piutang Usaha (113), atau Pendapatan Jasa Sewa (413) tidak ditemukan.")
             }
 
-            // Jurnal 1: Mencatat piutang sebagai pendapatan (Piutang Usaha di Debit, Pendapatan Jasa Sewa di Kredit)
-            val piutangTransaction = Transaction(
-                description = "Piutang sewa ${transaction.itemName} oleh ${transaction.customerName}",
-                amount = transaction.totalPrice,
-                date = transaction.rentalDate,
-                debitAccountId = piutangAccount.id,
-                creditAccountId = pendapatanSewaAccount.id,
-                debitAccountName = piutangAccount.accountName,
-                creditAccountName = pendapatanSewaAccount.accountName,
-                unitUsahaId = transaction.unitUsahaId,
-                userId = transaction.userId
-            )
-            transactionRepository.insert(piutangTransaction)
-
-            // Jurnal 2: Mencatat penerimaan uang muka (Kas Tunai di Debit, Piutang Usaha di Kredit)
-            if (transaction.downPayment > 0) {
-                val dpTransaction = Transaction(
-                    description = "Penerimaan DP sewa ${transaction.itemName} oleh ${transaction.customerName}",
-                    amount = transaction.downPayment,
+            // Cek status transaksi untuk menentukan pencatatan jurnal
+            if (transaction.status == "Lunas") {
+                // Jika status 'Lunas', langsung catat sebagai pendapatan
+                val lunasTransaction = Transaction(
+                    description = "Penerimaan kas sewa ${transaction.itemName} (Lunas)",
+                    amount = transaction.totalPrice,
                     date = transaction.rentalDate,
                     debitAccountId = kasAccount.id,
-                    creditAccountId = piutangAccount.id,
+                    creditAccountId = pendapatanSewaAccount.id,
                     debitAccountName = kasAccount.accountName,
-                    creditAccountName = piutangAccount.accountName,
+                    creditAccountName = pendapatanSewaAccount.accountName,
                     unitUsahaId = transaction.unitUsahaId,
                     userId = transaction.userId
                 )
-                transactionRepository.insert(dpTransaction)
-            }
-
-            // --- Bagian yang hilang: Memastikan Receivable juga tercatat di awal
-            val sisaPiutang = transaction.totalPrice - transaction.downPayment
-            if (sisaPiutang > 0) {
-                val receivableEntry = Receivable(
-                    id = transaction.id,
-                    userId = transaction.userId,
+                transactionRepository.insert(lunasTransaction)
+            } else {
+                // Jika status 'Belum Lunas' atau 'DP', gunakan logika piutang dan uang muka
+                // Jurnal 1: Mencatat piutang sebagai pendapatan
+                val piutangTransaction = Transaction(
+                    description = "Piutang sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                    amount = transaction.totalPrice,
+                    date = transaction.rentalDate,
+                    debitAccountId = piutangAccount.id,
+                    creditAccountId = pendapatanSewaAccount.id,
+                    debitAccountName = piutangAccount.accountName,
+                    creditAccountName = pendapatanSewaAccount.accountName,
                     unitUsahaId = transaction.unitUsahaId,
-                    contactName = transaction.customerName,
-                    description = "Sisa pembayaran sewa ${transaction.itemName}",
-                    amount = sisaPiutang,
-                    transactionDate = transaction.rentalDate,
-                    dueDate = transaction.expectedReturnDate,
-                    isPaid = false
+                    userId = transaction.userId
                 )
-                debtRepository.insert(receivableEntry)
+                transactionRepository.insert(piutangTransaction)
+
+                // Jurnal 2: Mencatat penerimaan uang muka (jika ada)
+                if (transaction.downPayment > 0) {
+                    val dpTransaction = Transaction(
+                        description = "Penerimaan DP sewa ${transaction.itemName} oleh ${transaction.customerName}",
+                        amount = transaction.downPayment,
+                        date = transaction.rentalDate,
+                        debitAccountId = kasAccount.id,
+                        creditAccountId = piutangAccount.id,
+                        debitAccountName = kasAccount.accountName,
+                        creditAccountName = piutangAccount.accountName,
+                        unitUsahaId = transaction.unitUsahaId,
+                        userId = transaction.userId
+                    )
+                    transactionRepository.insert(dpTransaction)
+                }
+
+                // Catat sisa piutang di tabel Receivable
+                val sisaPiutang = transaction.totalPrice - transaction.downPayment
+                if (sisaPiutang > 0) {
+                    val receivableEntry = Receivable(
+                        id = transaction.id,
+                        userId = transaction.userId,
+                        unitUsahaId = transaction.unitUsahaId,
+                        contactName = transaction.customerName,
+                        description = "Sisa pembayaran sewa ${transaction.itemName}",
+                        amount = sisaPiutang,
+                        transactionDate = transaction.rentalDate,
+                        dueDate = transaction.expectedReturnDate,
+                        isPaid = false
+                    )
+                    debtRepository.insert(receivableEntry)
+                }
             }
 
+            // Pastikan Anda sudah menambahkan ID yang dihasilkan oleh Firestore
             firestore.collection("rental_transactions").document(transaction.id).set(transaction).await()
         }
     }
-
     suspend fun processPayment(
         transactionId: String,
         paymentAmount: Double

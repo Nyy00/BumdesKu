@@ -50,7 +50,8 @@ fun CreateRentalTransactionScreen(
     var selectedItem by remember { mutableStateOf<RentalItem?>(null) }
     var selectedCustomer by remember { mutableStateOf<Customer?>(null) }
     var quantity by remember { mutableStateOf("1") }
-    // Tambahkan state untuk status pembayaran dan uang muka
+
+    // State untuk status pembayaran dan uang muka
     var paymentStatus by remember { mutableStateOf(PaymentStatus.BELUM_LUNAS) }
     var downPayment by remember { mutableStateOf("") }
     var isPaymentDropdownExpanded by remember { mutableStateOf(false) }
@@ -69,12 +70,22 @@ fun CreateRentalTransactionScreen(
     }
     val totalPrice = (selectedItem?.rentalPricePerDay ?: 0.0) * (quantity.toIntOrNull() ?: 0) * durationInDays
 
+    val formattedTotalPrice = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+        maximumFractionDigits = 0
+    }.format(totalPrice)
+
     LaunchedEffect(selectedItem, startDate, endDate) {
         val unitId = selectedItem?.unitUsahaId
         if (selectedItem != null && unitId != null && startDate != null && endDate != null) {
             viewModel.checkItemAvailability(selectedItem!!.id, unitId, startDate, endDate)
         } else {
             viewModel.clearAvailabilityCheck()
+        }
+    }
+
+    LaunchedEffect(paymentStatus, totalPrice) {
+        if (paymentStatus == PaymentStatus.LUNAS) {
+            downPayment = totalPrice.toString()
         }
     }
 
@@ -230,7 +241,13 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
-            // Bagian baru: Input status pembayaran
+            Text(
+                text = "Total Harga: $formattedTotalPrice",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.End)
+            )
+
             ExposedDropdownMenuBox(
                 expanded = isPaymentDropdownExpanded,
                 onExpandedChange = { isPaymentDropdownExpanded = !isPaymentDropdownExpanded }
@@ -255,21 +272,27 @@ fun CreateRentalTransactionScreen(
                             onClick = {
                                 paymentStatus = status
                                 isPaymentDropdownExpanded = false
+                                if (status == PaymentStatus.LUNAS) {
+                                    downPayment = totalPrice.toInt().toString()
+                                } else {
+                                    downPayment = ""
+                                }
                             }
                         )
                     }
                 }
             }
 
-            // Input DP hanya jika statusnya DP
-            if (paymentStatus == PaymentStatus.DP) {
+            // Kolom Uang Muka hanya ditampilkan untuk status DP dan Lunas
+            if (paymentStatus == PaymentStatus.DP || paymentStatus == PaymentStatus.LUNAS) {
                 OutlinedTextField(
                     value = downPayment,
                     onValueChange = { newDp ->
                         val dp = newDp.filter { c -> c.isDigit() }
                         downPayment = dp
                     },
-                    label = { Text("Uang Muka (DP)") },
+                    label = { Text(if (paymentStatus == PaymentStatus.LUNAS) "Total Pembayaran (Lunas)" else "Uang Muka (DP)") },
+                    enabled = paymentStatus == PaymentStatus.DP,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     visualTransformation = ThousandSeparatorVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
