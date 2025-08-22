@@ -1,6 +1,5 @@
 package com.dony.bumdesku.features.toko
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,12 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.data.Asset
 import com.dony.bumdesku.data.CartItem
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.*
 
@@ -38,17 +37,35 @@ fun PosScreen(
     val cartItems by posViewModel.cartItems.collectAsState()
     val totalPrice by posViewModel.totalPrice.collectAsState()
     val saleState by posViewModel.saleState.collectAsState()
-    val context = LocalContext.current
+
+    // Deklarasikan state dan coroutine scope untuk Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(saleState) {
         when(saleState) {
             SaleState.SUCCESS -> {
-                Toast.makeText(context, "Transaksi berhasil!", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch {
+                    val snackbarResult = snackbarHostState.showSnackbar(
+                        message = "Transaksi berhasil!",
+                        actionLabel = "Kembali ke Utama",
+                        duration = SnackbarDuration.Short
+                    )
+
+                    if (snackbarResult == SnackbarResult.ActionPerformed) {
+                        onSaleComplete()
+                    }
+                }
                 posViewModel.resetSaleState()
-                onSaleComplete()
             }
             SaleState.ERROR -> {
-                Toast.makeText(context, "Gagal memproses transaksi.", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Gagal memproses transaksi.",
+                        actionLabel = "Tutup",
+                        duration = SnackbarDuration.Long
+                    )
+                }
                 posViewModel.resetSaleState()
             }
             else -> {}
@@ -73,18 +90,15 @@ fun PosScreen(
                 isProcessing = saleState == SaleState.LOADING,
                 isCartEmpty = cartItems.isEmpty()
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) } // Tambahkan SnackbarHost di sini
     ) {paddingValues ->
-        // ✅ --- PERUBAHAN UTAMA DI SINI ---
-        // Mengubah Row menjadi Column untuk tata letak atas-bawah.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Bagian Atas: Daftar Produk
-            Column(modifier = Modifier.weight(1.5f)) { // Beri ruang lebih banyak untuk produk
-                // Search Bar
+            Column(modifier = Modifier.weight(1.5f)) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { posViewModel.onSearchQueryChange(it) },
@@ -96,7 +110,6 @@ fun PosScreen(
                     singleLine = true
                 )
 
-                // Tab Kategori
                 if (categories.size > 1) {
                     ScrollableTabRow(
                         selectedTabIndex = categories.indexOf(selectedCategory),
@@ -120,12 +133,10 @@ fun PosScreen(
                 )
             }
 
-            // ✅ Divider horizontal sebagai pemisah
             Divider(modifier = Modifier.padding(horizontal = 8.dp))
 
-            // Bagian Bawah: Keranjang Belanja
             CartPanel(
-                modifier = Modifier.weight(1f), // Beri ruang lebih sedikit untuk keranjang
+                modifier = Modifier.weight(1f),
                 cartItems = cartItems,
                 onQuantityChange = { item, newQty ->
                     posViewModel.updateQuantity(item, newQty)

@@ -1,6 +1,5 @@
 package com.dony.bumdesku.features.jasa_sewa
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,6 +22,7 @@ import com.dony.bumdesku.data.RentalTransaction
 import com.dony.bumdesku.util.ThousandSeparatorVisualTransformation
 import com.dony.bumdesku.viewmodel.RentalSaveState
 import com.dony.bumdesku.viewmodel.RentalViewModel
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -42,7 +42,6 @@ fun CreateRentalTransactionScreen(
 
     val availableStockResult by viewModel.availabilityState.collectAsStateWithLifecycle()
     val saveState by viewModel.saveState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
     val dateRangePickerState = rememberDateRangePickerState()
     var showDatePicker by remember { mutableStateOf(false) }
@@ -61,6 +60,10 @@ fun CreateRentalTransactionScreen(
 
     val startDate = dateRangePickerState.selectedStartDateMillis
     val endDate = dateRangePickerState.selectedEndDateMillis
+
+    // Tambahkan state dan scope untuk Snackbar
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     // Hitung total harga sewa
     val durationInDays = if (startDate != null && endDate != null) {
@@ -89,16 +92,29 @@ fun CreateRentalTransactionScreen(
         }
     }
 
+    // Perbarui LaunchedEffect ini untuk menggunakan Snackbar
     LaunchedEffect(saveState) {
         when (saveState) {
             RentalSaveState.SUCCESS -> {
-                Toast.makeText(context, "Transaksi sewa berhasil dibuat", Toast.LENGTH_SHORT).show()
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Transaksi sewa berhasil dibuat",
+                        actionLabel = "Tutup",
+                        duration = SnackbarDuration.Short
+                    )
+                }
                 viewModel.resetSaveState()
                 onNavigateUp()
             }
             is RentalSaveState.ERROR -> {
                 val errorMessage = (saveState as RentalSaveState.ERROR).message
-                Toast.makeText(context, "Gagal: $errorMessage", Toast.LENGTH_LONG).show()
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "Gagal: $errorMessage",
+                        actionLabel = "Tutup",
+                        duration = SnackbarDuration.Long
+                    )
+                }
                 viewModel.resetSaveState()
             }
             else -> {}
@@ -115,7 +131,8 @@ fun CreateRentalTransactionScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
