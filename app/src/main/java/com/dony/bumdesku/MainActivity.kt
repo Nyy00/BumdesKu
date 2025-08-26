@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
 
         // Inisialisasi ViewModel Factories
         val transactionViewModelFactory = TransactionViewModelFactory(transactionRepository, unitUsahaRepository, accountRepository)
-        val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository, agriRepository)
+        val assetViewModelFactory = AssetViewModelFactory(assetRepository, unitUsahaRepository, agriRepository, rentalRepository)
         val accountViewModelFactory = AccountViewModelFactory(accountRepository)
         val debtViewModelFactory = DebtViewModelFactory(debtRepository, transactionRepository, accountRepository, unitUsahaRepository)
         val posViewModelFactory = PosViewModelFactory(assetRepository, posRepository)

@@ -28,6 +28,8 @@ class RentalRepository(
     private val firestore = Firebase.firestore
     private val scope = CoroutineScope(Dispatchers.IO)
 
+    val allRentalItems: Flow<List<RentalItem>> = rentalDao.getAllItems()
+
     fun syncDataForUnit(unitId: String): List<ListenerRegistration> {
         val itemListener = firestore.collection("rental_items").whereEqualTo("unitUsahaId", unitId)
             .addSnapshotListener { snapshots, e ->

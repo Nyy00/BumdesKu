@@ -8,7 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.dony.bumdesku.data.Asset
 import com.dony.bumdesku.data.UnitUsaha
 import com.dony.bumdesku.repository.AssetRepository
-import com.dony.bumdesku.repository.AgriRepository // <-- 1. IMPORT BARU
+import com.dony.bumdesku.repository.AgriRepository
+import com.dony.bumdesku.repository.RentalRepository
 import com.dony.bumdesku.repository.UnitUsahaRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -19,19 +20,19 @@ enum class UploadState { IDLE, UPLOADING, SUCCESS, ERROR }
 class AssetViewModel(
     private val repository: AssetRepository,
     private val unitUsahaRepository: UnitUsahaRepository,
-    private val agriRepository: AgriRepository // <-- 2. TAMBAHKAN REPOSITORY BARU
+    private val agriRepository: AgriRepository,
+    private val rentalRepository: RentalRepository
 ) : ViewModel() {
 
     private val _selectedUnitFilter = MutableStateFlow<UnitUsaha?>(null)
     val selectedUnitFilter: StateFlow<UnitUsaha?> = _selectedUnitFilter.asStateFlow()
 
-    // <-- 3. GABUNGKAN DUA SUMBER DATA MENJADI SATU
     val combinedAssets: StateFlow<List<Asset>> = combine(
         repository.allAssets,
-        agriRepository.allAgriInventory, // Ambil data inventaris agri
+        agriRepository.allAgriInventory,
+        rentalRepository.allRentalItems,
         _selectedUnitFilter
-    ) { assets, agriInventory, selectedUnit ->
-        // Konversi AgriInventory menjadi tipe data Asset agar bisa ditampilkan bersama
+    ) { assets, agriInventory, rentalItems, selectedUnit ->
         val agriAsAssets = agriInventory.map { inv ->
             Asset(
                 id = inv.id,
@@ -39,18 +40,31 @@ class AssetViewModel(
                 unitUsahaId = inv.unitUsahaId,
                 name = inv.name,
                 description = "Dibeli pada ${Date(inv.purchaseDate)}",
-                quantity = inv.quantity.toInt(), // Konversi Double ke Int untuk tampilan
-                purchasePrice = inv.cost / if(inv.quantity > 0) inv.quantity else 1.0, // Hitung harga satuan
-                sellingPrice = 0.0, // Inventaris tidak punya harga jual langsung
-                imageUrl = "", // Tidak ada gambar untuk inventaris
+                quantity = inv.quantity.toInt(),
+                purchasePrice = inv.cost / if (inv.quantity > 0) inv.quantity else 1.0,
+                sellingPrice = 0.0,
+                imageUrl = "",
                 category = "Inventaris Agribisnis"
             )
         }
 
-        // Gabungkan kedua daftar
-        val allItems = assets + agriAsAssets
+        val rentalAsAssets = rentalItems.map { item ->
+            Asset(
+                id = item.id,
+                userId = "",
+                unitUsahaId = item.unitUsahaId,
+                name = item.name,
+                description = item.description,
+                quantity = item.getTotalStock(),
+                purchasePrice = 0.0,
+                sellingPrice = item.rentalPricePerDay,
+                imageUrl = "",
+                category = "Aset Jasa Sewa"
+            )
+        }
 
-        // Terapkan filter jika ada
+        val allItems = assets + agriAsAssets + rentalAsAssets
+
         if (selectedUnit == null) {
             allItems
         } else {
@@ -76,11 +90,10 @@ class AssetViewModel(
         _selectedUnitFilter.value = unitUsaha
     }
 
-    fun insert(asset: Asset) { // Hapus parameter imageUri
+    fun insert(asset: Asset) {
         viewModelScope.launch {
             _uploadState.value = UploadState.UPLOADING
             try {
-                // Panggil repository tanpa imageUri
                 repository.insert(asset)
                 _uploadState.value = UploadState.SUCCESS
             } catch (e: Exception) {
@@ -94,10 +107,12 @@ class AssetViewModel(
     }
 
     fun delete(asset: Asset) = viewModelScope.launch {
-        // Cek apakah ini inventaris atau aset biasa
         if (asset.category == "Inventaris Agribisnis") {
-            // TODO: Tambahkan logika hapus untuk agri_inventory jika diperlukan
-        } else {
+            // TODO: Logika hapus agri_inventory
+        } else if (asset.category == "Aset Jasa Sewa") {
+            // TODO: Logika hapus rental_item jika diperlukan
+        }
+        else {
             repository.delete(asset)
         }
     }
@@ -110,12 +125,13 @@ class AssetViewModel(
 class AssetViewModelFactory(
     private val repository: AssetRepository,
     private val unitUsahaRepository: UnitUsahaRepository,
-    private val agriRepository: AgriRepository // <-- 4. TAMBAHKAN DI FACTORY JUGA
+    private val agriRepository: AgriRepository,
+    private val rentalRepository: RentalRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(AssetViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return AssetViewModel(repository, unitUsahaRepository, agriRepository) as T
+            return AssetViewModel(repository, unitUsahaRepository, agriRepository, rentalRepository) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface RentalDao {
 
+    @Query("SELECT * FROM rental_items")
+    fun getAllItems(): Flow<List<RentalItem>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRentalItem(item: RentalItem)
 
