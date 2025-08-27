@@ -96,11 +96,20 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 ## 📸 Tampilan Aplikasi (Screenshots)
 
-*(Disarankan untuk menambahkan beberapa gambar tangkapan layar di sini untuk menunjukkan tampilan aplikasi Anda, seperti Halaman Utama, Layar Kasir, atau Laporan Keuangan)*
+Berikut adalah beberapa tampilan utama dari aplikasi BumdesKu.
 
-| Halaman Utama | Kasir Toko | Kasir Agribisnis | Struk Digital |
-| :---: | :---: | :---: | :---: |
-| ![Tampilan Halaman Utama](app/screenshoot/home.png) | ![Tampilan Kasir Toko](app/screenshoot/kasir1.png) | ![Tampilan Kasir Agribisnis](app/screenshoot/kasir2.png) |![Tampilan Struk Digital](app/screenshoot/struk.png) |
+| Halaman Login | Halaman Utama (Manajer) |
+| :---: | :---: |
+| ![Login](app/screenshoot/login.png) | ![Manager Home](app/screenshoot/homemanager.png) |
+| **Kasir Toko** | **Kasir Agribisnis** |
+| ![Kasir Toko](app/screenshoot/kasirtoko.png) | ![Kasir Agribisnis](app/screenshoot/kasiragribisnis.png) |
+| **Dasbor Jasa Sewa** | **Manajemen Pelanggan** |
+| ![Dasbor Sewa](app/screenshoot/dashboardssewa.png) | ![Pelanggan](app/screenshoot/customer.png) |
+| **Siklus Produksi** | **Laporan Keuangan** |
+| ![Siklus Produksi](app/screenshoot/cycleagribisnis.png) | ![Laporan](app/screenshoot/report.png) |
+| **Struk Digital (Toko)** | **Struk Digital (Sewa)** |
+| ![Struk Toko](app/screenshoot/struktoko.png) | ![Struk Sewa](app/screenshoot/struksewa.png) |
+
 
 ---
 
