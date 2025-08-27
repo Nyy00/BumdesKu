@@ -98,17 +98,17 @@ Untuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:
 
 Berikut adalah beberapa tampilan utama dari aplikasi BumdesKu.
 
-| Halaman Login | Halaman Utama (Manajer) |
-| :---: | :---: |
-| ![Login](app/screenshoot/login.png) | ![Manager Home](app/screenshoot/homemanager.png) |
-| **Kasir Toko** | **Kasir Agribisnis** |
-| ![Kasir Toko](app/screenshoot/kasirtoko.png) | ![Kasir Agribisnis](app/screenshoot/kasiragribisnis.png) |
-| **Dasbor Jasa Sewa** | **Manajemen Pelanggan** |
-| ![Dasbor Sewa](app/screenshoot/dashboardssewa.png) | ![Pelanggan](app/screenshoot/customer.png) |
-| **Siklus Produksi** | **Laporan Keuangan** |
-| ![Siklus Produksi](app/screenshoot/cycleagribisnis.png) | ![Laporan](app/screenshoot/report.png) |
-| **Struk Digital (Toko)** | **Struk Digital (Sewa)** |
-| ![Struk Toko](app/screenshoot/struktoko.png) | ![Struk Sewa](app/screenshoot/struksewa.png) |
+|                      Halaman Login                      |                 Halaman Utama (Manajer)                  |
+|:-------------------------------------------------------:|:--------------------------------------------------------:|
+|           ![Login](app/screenshoot/login.png)           |     ![Manager Home](app/screenshoot/homemanager.png)     |
+|                     **Kasir Toko**                      |                   **Kasir Agribisnis**                   |
+|      ![Kasir Toko](app/screenshoot/kasirtoko.png)       | ![Kasir Agribisnis](app/screenshoot/kasiragribisnis.png) |
+|                  **Dasbor Jasa Sewa**                   |                 **Manajemen Pelanggan**                  |
+|    ![Dasbor Sewa](app/screenshoot/dashboardsewa.png)    |        ![Pelanggan](app/screenshoot/customer.png)        |
+|                   **Siklus Produksi**                   |                   **Laporan Keuangan**                   |
+| ![Siklus Produksi](app/screenshoot/cycleagribisnis.png) |          ![Laporan](app/screenshoot/report.png)          |
+|                **Struk Digital (Toko)**                 |                 **Struk Digital (Sewa)**                 |
+|      ![Struk Toko](app/screenshoot/struktoko.png)       |       ![Struk Sewa](app/screenshoot/struksewa.png)       |
 
 
 ---
