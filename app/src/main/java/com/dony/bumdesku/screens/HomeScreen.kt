@@ -37,7 +37,8 @@ data class QuickAction(
     val title: String,
     val icon: ImageVector,
     val route: String,
-    val isManagerOnly: Boolean = false
+    val isManagerOnly: Boolean = false,
+    val isWriteAction: Boolean = false
 )
 
 @Composable
@@ -49,43 +50,42 @@ fun HomeScreen(
     activeUnitUsahaType: UnitUsahaType = UnitUsahaType.UMUM
 ) {
     val baseActions = listOf(
-        QuickAction("Input Jurnal", Icons.Default.AddCircleOutline, "add_transaction"),
+        QuickAction("Input Jurnal", Icons.Default.AddCircleOutline, "add_transaction", isWriteAction = true),
         QuickAction("Aset Tetap", Icons.Default.Business, "fixed_asset_list"),
         QuickAction("Buku Besar", Icons.AutoMirrored.Filled.MenuBook, "transaction_list"),
         QuickAction("Laba Rugi", Icons.Default.Assessment, "report_screen"),
-        QuickAction("Aset & Stok", Icons.Default.Inventory, "asset_list"),
-        QuickAction("Utang", Icons.Default.ArrowDownward, "payable_list"),
-        QuickAction("Piutang", Icons.Default.ArrowUpward, "receivable_list"),
+        QuickAction("Aset & Stok", Icons.Default.Inventory, "asset_list", isWriteAction = true),
+        QuickAction("Utang", Icons.Default.ArrowDownward, "payable_list", isWriteAction = true),
+        QuickAction("Piutang", Icons.Default.ArrowUpward, "receivable_list", isWriteAction = true),
         QuickAction("Neraca Saldo", Icons.Default.Balance, "neraca_saldo_screen")
     )
 
     val unitSpecificActions = when (activeUnitUsahaType) {
         UnitUsahaType.TOKO -> listOf(
-            QuickAction("Kasir (POS)", Icons.Default.PointOfSale, "pos_screen"),
+            QuickAction("Kasir (POS)", Icons.Default.PointOfSale, "pos_screen", isWriteAction = true),
             QuickAction("Laporan Penjualan", Icons.Default.Summarize, "sales_report")
         )
         UnitUsahaType.AGRIBISNIS -> listOf(
-            QuickAction("Catat Panen", Icons.Default.AddBusiness, "add_harvest"),
+            QuickAction("Catat Panen", Icons.Default.AddBusiness, "add_harvest", isWriteAction = true),
             QuickAction("Stok Panen", Icons.AutoMirrored.Filled.ListAlt, "harvest_list"),
-            QuickAction("Siklus Produksi", Icons.Default.Autorenew, "production_cycle_list"),
-            QuickAction("Jual Hasil", Icons.Default.ShoppingCart, "produce_sale"),
-            QuickAction("Inventaris Agri", Icons.Default.Inventory2, "agri_inventory_list"),
+            QuickAction("Siklus Produksi", Icons.Default.Autorenew, "production_cycle_list", isWriteAction = true),
+            QuickAction("Jual Hasil", Icons.Default.ShoppingCart, "produce_sale", isWriteAction = true),
+            QuickAction("Inventaris Agri", Icons.Default.Inventory2, "agri_inventory_list", isWriteAction = true),
             QuickAction("Laporan Penjualan", Icons.Default.Summarize, "agri_sale_report")
         )
-
         UnitUsahaType.JASA_SEWA -> listOf(
-            QuickAction("Dasbor Sewa", Icons.Default.EventSeat, "rental_dashboard"),
-            QuickAction("Tambah Barang", Icons.Default.AddBusiness, "add_rental_item"),
+            QuickAction("Dasbor Sewa", Icons.Default.EventSeat, "rental_dashboard", isWriteAction = true),
+            QuickAction("Tambah Barang", Icons.Default.AddBusiness, "add_rental_item", isWriteAction = true),
             QuickAction("Riwayat Sewa", Icons.Default.History, "rental_history_screen"),
-            QuickAction("Manajemen Pelanggan", Icons.Default.PeopleAlt, "rental/customers")
+            QuickAction("Manajemen Pelanggan", Icons.Default.PeopleAlt, "rental/customers", isWriteAction = true)
         )
         else -> emptyList()
     }
 
     val managerActions = listOf(
-        QuickAction("Unit Usaha", Icons.Default.Store, "unit_usaha_management", isManagerOnly = true),
-        QuickAction("Daftar Akun", Icons.Default.AccountBalanceWallet, "account_list", isManagerOnly = true),
-        QuickAction("Kunci Jurnal", Icons.Default.Lock, "lock_journal", isManagerOnly = true),
+        QuickAction("Unit Usaha", Icons.Default.Store, "unit_usaha_management", isManagerOnly = true, isWriteAction = true),
+        QuickAction("Daftar Akun", Icons.Default.AccountBalanceWallet, "account_list", isManagerOnly = true, isWriteAction = true),
+        QuickAction("Kunci Jurnal", Icons.Default.Lock, "lock_journal", isManagerOnly = true, isWriteAction = true),
         QuickAction("Neraca", Icons.Default.AccountBalance, "neraca_screen", isManagerOnly = true),
         QuickAction("Perubahan Modal", Icons.Default.TrendingUp, "lpe_screen", isManagerOnly = true)
     )
@@ -97,7 +97,13 @@ fun HomeScreen(
     }
 
     val allActions = filteredBaseActions + unitSpecificActions + managerActions
-    val availableActions = if (userRole == "manager") allActions else allActions.filter { !it.isManagerOnly }
+
+    val availableActions = when (userRole) {
+        "manager" -> allActions
+        "pengurus" -> allActions.filter { !it.isManagerOnly }
+        "auditor" -> allActions.filter { !it.isManagerOnly && !it.isWriteAction }
+        else -> emptyList()
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background
