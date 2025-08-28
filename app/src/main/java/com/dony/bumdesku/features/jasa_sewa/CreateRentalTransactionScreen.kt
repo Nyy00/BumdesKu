@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,7 +49,6 @@ fun CreateRentalTransactionScreen(
     var selectedCustomer by remember { mutableStateOf<Customer?>(null) }
     var quantity by remember { mutableStateOf("1") }
 
-    // State untuk status pembayaran dan uang muka
     var paymentStatus by remember { mutableStateOf(PaymentStatus.BELUM_LUNAS) }
     var downPayment by remember { mutableStateOf("") }
     var isPaymentDropdownExpanded by remember { mutableStateOf(false) }
@@ -61,11 +59,9 @@ fun CreateRentalTransactionScreen(
     val startDate = dateRangePickerState.selectedStartDateMillis
     val endDate = dateRangePickerState.selectedEndDateMillis
 
-    // Tambahkan state dan scope untuk Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
-    // Hitung total harga sewa
     val durationInDays = if (startDate != null && endDate != null) {
         ceil((endDate - startDate) / (1000.0 * 60 * 60 * 24)).toInt().coerceAtLeast(1)
     } else {
@@ -86,13 +82,6 @@ fun CreateRentalTransactionScreen(
         }
     }
 
-    LaunchedEffect(paymentStatus, totalPrice) {
-        if (paymentStatus == PaymentStatus.LUNAS) {
-            downPayment = totalPrice.toString()
-        }
-    }
-
-    // Perbarui LaunchedEffect ini untuk menggunakan Snackbar
     LaunchedEffect(saveState) {
         when (saveState) {
             RentalSaveState.SUCCESS -> {
@@ -142,6 +131,7 @@ fun CreateRentalTransactionScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Dropdown Barang
             ExposedDropdownMenuBox(
                 expanded = isItemDropdownExpanded,
                 onExpandedChange = { isItemDropdownExpanded = !isItemDropdownExpanded }
@@ -173,6 +163,7 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
+            // Dropdown Pelanggan
             ExposedDropdownMenuBox(
                 expanded = isCustomerDropdownExpanded,
                 onExpandedChange = { isCustomerDropdownExpanded = !isCustomerDropdownExpanded }
@@ -203,6 +194,7 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
+            // Field Jumlah
             OutlinedTextField(
                 value = quantity,
                 onValueChange = { newQty ->
@@ -214,6 +206,7 @@ fun CreateRentalTransactionScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Tombol Tanggal
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Rentang Tanggal Sewa",
@@ -229,6 +222,7 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
+            // Cek Ketersediaan
             Box(modifier = Modifier.padding(vertical = 8.dp)) {
                 availableStockResult?.let { result ->
                     result.fold(
@@ -258,6 +252,7 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
+            // Total Harga
             Text(
                 text = "Total Harga: $formattedTotalPrice",
                 style = MaterialTheme.typography.titleMedium,
@@ -289,10 +284,11 @@ fun CreateRentalTransactionScreen(
                             onClick = {
                                 paymentStatus = status
                                 isPaymentDropdownExpanded = false
-                                if (status == PaymentStatus.LUNAS) {
-                                    downPayment = totalPrice.toInt().toString()
-                                } else {
-                                    downPayment = ""
+                                // Logika ini menjadi satu-satunya sumber kebenaran.
+                                when (status) {
+                                    PaymentStatus.LUNAS -> downPayment = totalPrice.toLong().toString()
+                                    PaymentStatus.BELUM_LUNAS -> downPayment = ""
+                                    PaymentStatus.DP -> downPayment = ""
                                 }
                             }
                         )
@@ -300,15 +296,19 @@ fun CreateRentalTransactionScreen(
                 }
             }
 
-            // Kolom Uang Muka hanya ditampilkan untuk status DP dan Lunas
+            // Tampilkan field DP jika statusnya DP atau LUNAS
             if (paymentStatus == PaymentStatus.DP || paymentStatus == PaymentStatus.LUNAS) {
                 OutlinedTextField(
                     value = downPayment,
                     onValueChange = { newDp ->
-                        val dp = newDp.filter { c -> c.isDigit() }
-                        downPayment = dp
+                        // Hanya izinkan perubahan jika status adalah DP
+                        if (paymentStatus == PaymentStatus.DP) {
+                            val dp = newDp.filter { c -> c.isDigit() }
+                            downPayment = dp
+                        }
                     },
                     label = { Text(if (paymentStatus == PaymentStatus.LUNAS) "Total Pembayaran (Lunas)" else "Uang Muka (DP)") },
+                    // Field ini hanya bisa diedit jika statusnya DP.
                     enabled = paymentStatus == PaymentStatus.DP,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     visualTransformation = ThousandSeparatorVisualTransformation(),
@@ -316,8 +316,10 @@ fun CreateRentalTransactionScreen(
                 )
             }
 
+
             Spacer(modifier = Modifier.weight(1f))
 
+            // Tombol Simpan
             val stockForSelectedDate = availableStockResult?.getOrNull() ?: -1
             val quantityInt = quantity.toIntOrNull() ?: 0
 
@@ -329,7 +331,6 @@ fun CreateRentalTransactionScreen(
                     saveState != RentalSaveState.LOADING &&
                     stockForSelectedDate >= quantityInt &&
                     (paymentStatus != PaymentStatus.DP || (downPayment.toDoubleOrNull() ?: 0.0) <= totalPrice)
-
 
             Button(
                 onClick = {
@@ -350,7 +351,6 @@ fun CreateRentalTransactionScreen(
                         userId = viewModel.getCurrentUserId(),
                         status = "Disewa"
                     )
-
                     viewModel.createRental(transaction)
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -365,6 +365,7 @@ fun CreateRentalTransactionScreen(
         }
     }
 
+    // Date Picker Dialog
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },

@@ -25,7 +25,6 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-// 1. Layar Utama: Daftar Siklus Produksi
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProductionCycleListScreen(
@@ -92,8 +91,6 @@ fun CycleItemCard(cycle: ProductionCycle, onClick: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(cycle.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
-            // ✅✅✅ PERUBAHAN DIMULAI DARI SINI ✅✅✅
-
             // Menampilkan informasi tanggal
             Text("Dimulai: ${dateFormat.format(Date(cycle.startDate))}", style = MaterialTheme.typography.bodySmall)
             if (cycle.status == CycleStatus.SELESAI && cycle.endDate != null) {
@@ -127,7 +124,6 @@ fun CycleItemCard(cycle: ProductionCycle, onClick: () -> Unit) {
                 Text("Status:", style = MaterialTheme.typography.bodyMedium)
                 Text(cycle.status.name, fontWeight = FontWeight.SemiBold, color = statusColor)
             }
-            // ✅✅✅ PERUBAHAN SELESAI DI SINI ✅✅✅
         }
     }
 }
@@ -207,7 +203,6 @@ fun CycleDetailScreen(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Bagian 1: Detail Ringkasan Siklus
             item {
                 cycle?.let {
                     CycleDetailHeader(
@@ -219,7 +214,6 @@ fun CycleDetailScreen(
                 }
             }
 
-            // Bagian 2: Daftar Biaya
             item {
                 Text(
                     "Rincian Biaya Produksi",

@@ -6,10 +6,9 @@ import com.google.firebase.firestore.PropertyName
 
 @Entity(tableName = "transactions")
 data class Transaction(
-    @PrimaryKey // ✅ UBAH: Jadikan 'id' sebagai Primary Key
-    var id: String = "", // Jadikan 'var' dan tipe data String
+    @PrimaryKey
+    var id: String = "",
 
-    // localId tidak lagi dibutuhkan sebagai Primary Key
     var userId: String = "",
     val description: String = "",
     val amount: Double = 0.0,
@@ -22,6 +21,5 @@ data class Transaction(
     @get:PropertyName("locked") @set:PropertyName("locked")
     var isLocked: Boolean = false
 ) {
-    // Konstruktor kosong tetap diperlukan
     constructor() : this("", "", "", 0.0, 0L, "", "", "", "", "", false)
 }

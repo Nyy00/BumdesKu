@@ -14,7 +14,7 @@ interface TransactionDao {
     @Delete
     suspend fun delete(transaction: Transaction)
 
-    @Query("SELECT * FROM transactions WHERE id = :id") // ✅ UBAH: Cari berdasarkan 'id'
+    @Query("SELECT * FROM transactions WHERE id = :id")
     fun getTransactionById(id: String): Flow<Transaction?>
 
     @Query("SELECT * FROM transactions ORDER BY date DESC")

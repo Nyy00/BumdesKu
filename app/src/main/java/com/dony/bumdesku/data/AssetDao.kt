@@ -18,7 +18,7 @@ interface AssetDao {
     @Query("SELECT * FROM assets ORDER BY name ASC")
     fun getAllAssets(): Flow<List<Asset>>
 
-    @Query("SELECT * FROM assets WHERE id = :id") // ✅ UBAH: Cari berdasarkan 'id'
+    @Query("SELECT * FROM assets WHERE id = :id")
     fun getAssetById(id: String): Flow<Asset?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

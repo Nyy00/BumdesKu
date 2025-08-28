@@ -48,14 +48,28 @@ fun AgriSaleDetailScreen(
 
     // Fungsi untuk membangun teks struk agribisnis
     fun buildReceiptText(): String {
+        val receiptWidth = 32 // Lebar struk untuk printer 58mm
+
+        // Fungsi bantuan untuk meratakan teks ke tengah
+        fun centerText(text: String): String {
+            val padding = (receiptWidth - text.length) / 2
+            return " ".repeat(kotlin.math.max(0, padding)) + text
+        }
+
+        // Fungsi bantuan untuk membuat baris dengan teks kiri dan kanan
+        fun createRow(left: String, right: String): String {
+            val spaces = receiptWidth - left.length - right.length
+            return left + " ".repeat(kotlin.math.max(0, spaces)) + right
+        }
+
         val dateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
         val builder = StringBuilder()
-        // Menggunakan format ESC/POS sederhana
+
+        // Perintah inisialisasi printer
         val esc: Char = 27.toChar()
         val initPrinter = byteArrayOf(esc.code.toByte(), 64)
         val alignCenter = byteArrayOf(esc.code.toByte(), 97, 1)
         val alignLeft = byteArrayOf(esc.code.toByte(), 97, 0)
-        val alignRight = byteArrayOf(esc.code.toByte(), 97, 2)
         val boldOn = byteArrayOf(esc.code.toByte(), 69, 1)
         val boldOff = byteArrayOf(esc.code.toByte(), 69, 0)
 
@@ -65,26 +79,48 @@ fun AgriSaleDetailScreen(
         builder.append("BUMDES Jangkang\n")
         builder.append(String(boldOff))
         builder.append("Unit Usaha Agribisnis\n\n")
-        builder.append(String(alignLeft))
-        builder.append("No: ${sale.id.take(8)}\n")
-        builder.append("Tgl: ${dateFormat.format(Date(sale.transactionDate))}\n")
-        builder.append("--------------------------------\n")
-        cartItems.forEach { item ->
-            val itemName = item.harvest.name
-            val qtyStr = "${if(item.quantity % 1.0 == 0.0) item.quantity.toInt() else item.quantity} ${item.harvest.unit}"
-            val subtotal = formatCurrency(item.quantity * item.harvest.sellingPrice)
-            builder.append("$itemName\n")
 
-            val spaces = 32 - qtyStr.length - subtotal.length
-            builder.append(qtyStr + " ".repeat(if(spaces > 0) spaces else 0) + subtotal + "\n")
+        builder.append(String(alignLeft))
+        builder.append(createRow("No:", sale.id.take(8).uppercase()))
+        builder.append("\n")
+        builder.append(createRow("Tgl:", dateFormat.format(Date(sale.transactionDate))))
+        builder.append("\n")
+        builder.append("-".repeat(receiptWidth)).append("\n")
+
+        cartItems.forEach { item ->
+            val pricePerUnit = item.harvest.sellingPrice.toLong()
+            val subtotal = (item.quantity * item.harvest.sellingPrice).toLong()
+            val formattedSubtotal = formatCurrency(subtotal.toDouble()).replace("Rp", "").trim()
+
+            // Menangani kuantitas desimal atau bulat
+            val quantityStr = if (item.quantity % 1.0 == 0.0) {
+                "${item.quantity.toInt()} ${item.harvest.unit}"
+            } else {
+                "${item.quantity} ${item.harvest.unit}"
+            }
+
+            // Baris nama hasil panen
+            builder.append("${item.harvest.name}\n")
+
+            // Baris detail (Qty x Harga) dan Subtotal
+            val leftDetail = " $quantityStr x $pricePerUnit"
+            builder.append(createRow(leftDetail, formattedSubtotal))
+            builder.append("\n")
         }
-        builder.append("--------------------------------\n")
-        builder.append(String(alignRight))
+
+        builder.append("-".repeat(receiptWidth)).append("\n")
+
+        val totalText = "TOTAL"
+        val formattedTotal = formatCurrency(sale.totalPrice).replace("Rp", "").trim()
         builder.append(String(boldOn))
-        builder.append("TOTAL : ${formatCurrency(sale.totalPrice)}\n\n")
-        builder.append(String(alignCenter))
+        builder.append(createRow(totalText, formattedTotal))
+        builder.append("\n")
         builder.append(String(boldOff))
+
+        builder.append("\n")
+        builder.append(String(alignCenter))
         builder.append("Terima kasih!\n\n\n\n")
+
         return builder.toString()
     }
 

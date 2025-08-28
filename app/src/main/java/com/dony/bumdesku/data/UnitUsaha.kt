@@ -20,7 +20,7 @@ data class UnitUsaha(
     var id: String = "",
     var userId: String = "",
     val name: String = "",
-    val type: UnitUsahaType = UnitUsahaType.UMUM // Properti baru untuk tipe unit usaha
+    val type: UnitUsahaType = UnitUsahaType.UMUM
 ){
     // Constructor kosong untuk Firestore
     constructor() : this(0, "", "", "", UnitUsahaType.UMUM)

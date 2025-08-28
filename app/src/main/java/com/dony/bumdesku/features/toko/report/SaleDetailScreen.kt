@@ -24,6 +24,7 @@ import android.annotation.SuppressLint
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.max
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,63 +35,82 @@ fun SaleDetailScreen(
     onNavigateUp: () -> Unit,
     printerService: BluetoothPrinterService
 ) {
-    // Muat data sale ke ViewModel saat layar pertama kali dibuat
     LaunchedEffect(sale) {
         viewModel.loadSale(sale)
     }
 
     val cartItems by viewModel.cartItems.collectAsState()
     val dateFormat = SimpleDateFormat("dd MMMM yyyy, HH:mm", Locale("id", "ID"))
-
-    // ✅ --- Variabel yang hilang ditambahkan di sini ---
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var showDeviceListDialog by remember { mutableStateOf(false) }
 
-
+    // --- FUNGSI PENCETAKAN STRUK YANG DIPERBARUI ---
     fun buildReceiptText(): String {
-        val dateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
+        val receiptWidth = 32 // Lebar struk untuk printer 58mm
+
+        fun centerText(text: String): String {
+            val padding = (receiptWidth - text.length) / 2
+            return " ".repeat(max(0, padding)) + text
+        }
+
+        fun createRow(left: String, right: String): String {
+            val spaces = receiptWidth - left.length - right.length
+            return left + " ".repeat(max(0, spaces)) + right
+        }
+
+        val dateFormatPrint = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
         val builder = StringBuilder()
-        // Menggunakan format ESC/POS sederhana untuk tebal dan rata tengah
         val esc: Char = 27.toChar()
-        val gs: Char = 29.toChar()
         val initPrinter = byteArrayOf(esc.code.toByte(), 64)
         val alignCenter = byteArrayOf(esc.code.toByte(), 97, 1)
         val alignLeft = byteArrayOf(esc.code.toByte(), 97, 0)
-        val alignRight = byteArrayOf(esc.code.toByte(), 97, 2)
         val boldOn = byteArrayOf(esc.code.toByte(), 69, 1)
         val boldOff = byteArrayOf(esc.code.toByte(), 69, 0)
 
         builder.append(String(initPrinter))
         builder.append(String(alignCenter))
         builder.append(String(boldOn))
-        builder.append("BUMDES Jangkang\n")
+        builder.append("BUMDES JANGKANG\n")
         builder.append(String(boldOff))
         builder.append("Jl. Raya Desa Jangkang\n\n")
-        builder.append(String(alignLeft))
-        builder.append("No: ${sale.id.take(8)}\n")
-        builder.append("Tgl: ${dateFormat.format(Date(sale.transactionDate))}\n")
-        builder.append("--------------------------------\n")
-        cartItems.forEach { item ->
-            val itemName = item.asset.name
-            val qtyPrice = "${item.quantity} x ${item.asset.sellingPrice.toLong()}"
-            val subtotal = formatCurrency((item.quantity * item.asset.sellingPrice))
-            builder.append("$itemName\n")
 
-            // Membuat baris harga dan subtotal rata kanan
-            val spaces = 32 - qtyPrice.length - subtotal.length
-            builder.append(qtyPrice + " ".repeat(if(spaces > 0) spaces else 0) + subtotal + "\n")
+        builder.append(String(alignLeft))
+        builder.append(createRow("No:", sale.id.take(8).uppercase()))
+        builder.append("\n")
+        builder.append(createRow("Tgl:", dateFormatPrint.format(Date(sale.transactionDate))))
+        builder.append("\n")
+        builder.append("-".repeat(receiptWidth)).append("\n")
+
+        cartItems.forEach { item ->
+            val pricePerItem = item.asset.sellingPrice.toLong()
+            val subtotal = (item.quantity * item.asset.sellingPrice).toLong()
+            val formattedSubtotal = formatCurrency(subtotal.toDouble()).replace("Rp", "").trim()
+
+            // Baris nama item
+            builder.append("${item.asset.name}\n")
+            // Baris detail (Qty x Harga) dan Subtotal
+            val leftDetail = " ${item.quantity} x $pricePerItem"
+            builder.append(createRow(leftDetail, formattedSubtotal))
+            builder.append("\n")
         }
-        builder.append("--------------------------------\n")
-        builder.append(String(alignRight))
+
+        builder.append("-".repeat(receiptWidth)).append("\n")
+
+        val totalText = "TOTAL"
+        val formattedTotal = formatCurrency(sale.totalPrice).replace("Rp", "").trim()
         builder.append(String(boldOn))
-        builder.append("TOTAL : ${formatCurrency(sale.totalPrice)}\n\n")
-        builder.append(String(alignCenter))
+        builder.append(createRow(totalText, formattedTotal))
+        builder.append("\n")
         builder.append(String(boldOff))
+
+        builder.append("\n")
+        builder.append(String(alignCenter))
         builder.append("Terima kasih!\n\n\n\n")
 
         return builder.toString()
     }
+
 
     Scaffold(
         topBar = {
@@ -101,7 +121,6 @@ fun SaleDetailScreen(
                         Icon(Icons.Default.ArrowBack, "Kembali")
                     }
                 },
-                // ✅ --- Tombol cetak ditambahkan di sini ---
                 actions = {
                     IconButton(onClick = { showDeviceListDialog = true }) {
                         Icon(Icons.Default.Print, contentDescription = "Cetak Struk")
@@ -146,7 +165,6 @@ fun SaleDetailScreen(
         }
     }
 
-    // ✅ --- Dialog dipindahkan ke luar Scaffold content ---
     if (showDeviceListDialog) {
         val pairedDevices = printerService.getPairedDevices()
         AlertDialog(
@@ -159,7 +177,6 @@ fun SaleDetailScreen(
                     LazyColumn {
                         items(pairedDevices) { device ->
                             Text(
-                                // Menampilkan nama perangkat, pastikan permission tidak null
                                 text = device.name ?: "Unknown Device",
                                 modifier = Modifier
                                     .fillMaxWidth()

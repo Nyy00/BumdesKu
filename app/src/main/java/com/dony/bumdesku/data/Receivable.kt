@@ -10,7 +10,7 @@ data class Receivable(
     var id: String = "", // Jadikan ID Firestore sebagai Primary Key
 
     var userId: String = "",
-    val unitUsahaId: String = "", // ✅ TAMBAHKAN FIELD INI
+    val unitUsahaId: String = "",
     val contactName: String = "",
     val description: String = "",
     val amount: Double = 0.0,

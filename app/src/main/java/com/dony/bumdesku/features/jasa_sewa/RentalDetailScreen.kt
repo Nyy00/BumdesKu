@@ -18,14 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dony.bumdesku.data.RentalTransaction
-import com.dony.bumdesku.util.formatCurrency
 import com.dony.bumdesku.util.BluetoothPrinterService
+import com.dony.bumdesku.util.formatCurrency
 import com.dony.bumdesku.viewmodel.RentalViewModel
 import kotlinx.coroutines.launch
-import java.text.NumberFormat
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,69 +43,111 @@ fun RentalDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Detail Transaksi") },
+                title = { Text("Detail Transaksi Sewa") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateUp) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Kembali")
                     }
                 },
                 actions = {
-                    // Tampilkan tombol cetak jika transaksi ditemukan
                     if (transactionState != null) {
                         IconButton(onClick = { showDeviceListDialog = true }) {
-                            Icon(Icons.Default.Print, contentDescription = "Cetak Struk")
+                            Icon(Icons.Default.Print, contentDescription = "Cetak Bukti Sewa")
                         }
                     }
                 }
             )
         }
     ) { paddingValues ->
-        if (transactionState == null) {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues), contentAlignment = Alignment.Center) {
+        val transaction = transactionState
+
+        if (transaction == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
                 CircularProgressIndicator()
             }
         } else {
-            val transaction = transactionState!!
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Penyewa: ${transaction.customerName}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Barang: ${transaction.itemName}", style = MaterialTheme.typography.titleMedium)
-                Text("Jumlah: ${transaction.quantity}", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(16.dp))
+                // --- KARTU INFORMASI UTAMA ---
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = transaction.itemName,
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Penyewa: ${transaction.customerName}",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "Jumlah: ${transaction.quantity} unit",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
 
-                Divider()
-                Spacer(modifier = Modifier.height(16.dp))
+                // --- KARTU DETAIL WAKTU ---
+                item {
+                    DetailCard(title = "Periode Sewa") {
+                        val simpleDateFormat = SimpleDateFormat("EEEE, dd MMM yyyy", Locale("id", "ID"))
+                        DetailRow("Tanggal Sewa", simpleDateFormat.format(Date(transaction.rentalDate)))
+                        DetailRow("Tanggal Kembali", transaction.returnDate?.let { simpleDateFormat.format(Date(it)) } ?: "Belum Kembali")
+                    }
+                }
 
-                Text("Detail Waktu", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Sewa dari: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.rentalDate))}")
-                Text("Selesai pada: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.returnDate ?: 0L))}")
+                // --- KARTU RINCIAN BIAYA ---
+                item {
+                    DetailCard(title = "Rincian Biaya") {
+                        // Menghitung sisa pembayaran berdasarkan data yang tersimpan
+                        val sisaPembayaran = transaction.totalPrice - transaction.downPayment
 
-                Spacer(modifier = Modifier.height(16.dp))
+                        DetailRow("Harga per Hari", formatCurrency(transaction.pricePerDay))
+                        DetailRow("Total Dibayar", formatCurrency(transaction.downPayment))
 
-                Text("Informasi Biaya", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Harga per hari: ${formatCurrency(transaction.pricePerDay)}")
-                Text("Total Biaya: ${formatCurrency(transaction.totalPrice)}", fontWeight = FontWeight.Bold)
+                        // Hanya tampilkan sisa pembayaran jika nilainya lebih dari nol
+                        if (sisaPembayaran > 0) {
+                            DetailRow("Sisa Pembayaran", formatCurrency(sisaPembayaran))
+                        }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                        Divider(modifier = Modifier.padding(vertical = 8.dp))
+                        DetailRow("Total Biaya Sewa", formatCurrency(transaction.totalPrice), isTotal = true)
+                    }
+                }
 
+                // --- KARTU CATATAN ---
                 if (transaction.notesOnReturn.isNotBlank()) {
-                    Text("Catatan Pengembalian", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(transaction.notesOnReturn)
+                    item {
+                        DetailCard(title = "Catatan Pengembalian") {
+                            Text(
+                                text = transaction.notesOnReturn,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 
-    // Dialog untuk memilih printer Bluetooth
-    if (showDeviceListDialog) {
+    // Dialog untuk memilih printer Bluetooth (tidak ada perubahan di sini)
+    if (showDeviceListDialog && transactionState != null) {
         val pairedDevices = printerService.getPairedDevices()
         AlertDialog(
             onDismissRequest = { showDeviceListDialog = false },
@@ -124,16 +164,26 @@ fun RentalDetailScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         coroutineScope.launch {
-                                            transactionState?.let { trx ->
-                                                try {
-                                                    val receiptText = viewModel.buildRentalReceiptText(trx)
-                                                    printerService.printText(device, receiptText)
-                                                    Toast.makeText(context, "Mencetak...", Toast.LENGTH_SHORT).show()
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, "Gagal mencetak: ${e.message}", Toast.LENGTH_LONG).show()
-                                                } finally {
-                                                    showDeviceListDialog = false
-                                                }
+                                            try {
+                                                val receiptText = viewModel.buildRentalReceiptText(transactionState!!)
+                                                printerService.printText(device, receiptText)
+                                                Toast
+                                                    .makeText(
+                                                        context,
+                                                        "Mencetak...",
+                                                        Toast.LENGTH_SHORT
+                                                    )
+                                                    .show()
+                                            } catch (e: Exception) {
+                                                Toast
+                                                    .makeText(
+                                                        context,
+                                                        "Gagal mencetak: ${e.message}",
+                                                        Toast.LENGTH_LONG
+                                                    )
+                                                    .show()
+                                            } finally {
+                                                showDeviceListDialog = false
                                             }
                                         }
                                     }
@@ -148,6 +198,59 @@ fun RentalDetailScreen(
                     Text("Tutup")
                 }
             }
+        )
+    }
+}
+
+// Composable terpisah untuk Kartu Detail
+@Composable
+private fun DetailCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                content = content
+            )
+        }
+    }
+}
+
+// Composable terpisah untuk Baris Detail
+@Composable
+private fun DetailRow(label: String, value: String, isTotal: Boolean = false) {
+    val valueStyle = if (isTotal) {
+        MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    } else {
+        MaterialTheme.typography.bodyMedium
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = valueStyle
         )
     }
 }

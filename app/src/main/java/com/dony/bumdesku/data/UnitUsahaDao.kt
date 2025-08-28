@@ -22,7 +22,6 @@ interface UnitUsahaDao {
     @Query("SELECT * FROM unit_usaha ORDER BY name ASC")
     fun getAllUnitUsaha(): Flow<List<UnitUsaha>>
 
-    // Fungsi-fungsi yang ditambahkan
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(unitUsaha: List<UnitUsaha>)
 

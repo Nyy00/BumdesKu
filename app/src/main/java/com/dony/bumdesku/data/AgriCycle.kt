@@ -4,13 +4,13 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.google.firebase.firestore.PropertyName
 
-// Enum untuk status siklus (tidak ada perubahan)
+// Enum untuk status siklus
 enum class CycleStatus {
     BERJALAN,
     SELESAI
 }
 
-// Data class ProductionCycle (tidak ada perubahan)
+// Data class ProductionCycle
 @Entity(tableName = "production_cycles")
 data class ProductionCycle(
     @PrimaryKey
@@ -28,14 +28,13 @@ data class ProductionCycle(
     val status: CycleStatus = CycleStatus.BERJALAN
 )
 
-// Data class CycleCost (DIPERBARUI)
 @Entity(tableName = "cycle_costs")
 data class CycleCost(
     @PrimaryKey
     var id: String = "",
     var userId: String = "",
     val cycleId: String = "",
-    val unitUsahaId: String = "", // <-- TAMBAHKAN FIELD INI
+    val unitUsahaId: String = "",
     val date: Long = 0L,
     val description: String = "",
     val amount: Double = 0.0,

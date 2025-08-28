@@ -14,11 +14,10 @@ interface SaleDao {
     @Query("SELECT * FROM sales ORDER BY transactionDate DESC")
     fun getAllSales(): Flow<List<Sale>>
 
-    // --- TAMBAHKAN DUA FUNGSI INI ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(sales: List<Sale>)
 
     @Query("DELETE FROM sales")
     suspend fun deleteAll()
-    // ---------------------------------
+
 }

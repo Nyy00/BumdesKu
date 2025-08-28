@@ -5,8 +5,8 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "sales")
 data class Sale(
-    @PrimaryKey // ✅ UBAH: Jadikan 'id' sebagai Primary Key
-    var id: String = "", // Jadikan 'var' dan tipe data String
+    @PrimaryKey
+    var id: String = "",
 
     val itemsJson: String = "",
     val totalPrice: Double = 0.0,

@@ -13,16 +13,14 @@ enum class AccountCategory {
 
 @Entity(tableName = "accounts")
 data class Account(
-    @PrimaryKey // ✅ UBAH: Jadikan 'id' sebagai Primary Key
+    @PrimaryKey
     var id: String = "",
 
-    // localId tidak lagi dibutuhkan
     var userId: String = "",
     val accountNumber: String = "",
     val accountName: String = "",
 
     val category: AccountCategory
 ) {
-    // Konstruktor kosong tetap diperlukan untuk Firestore
     constructor() : this("", "", "", "", AccountCategory.ASET)
 }

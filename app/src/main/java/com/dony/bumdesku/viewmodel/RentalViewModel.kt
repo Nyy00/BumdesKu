@@ -64,7 +64,10 @@ class RentalViewModel(
                 customerRepository.getCustomers(unit.id),
                 rentalRepository.getRentalTransactions(unit.id)
             ) { items, customers, transactions ->
-                Log.d("RentalViewModel", "Data diterima: ${items.size} item, ${customers.size} pelanggan, ${transactions.size} transaksi")
+                Log.d(
+                    "RentalViewModel",
+                    "Data diterima: ${items.size} item, ${customers.size} pelanggan, ${transactions.size} transaksi"
+                )
 
                 val active = transactions.filter { it.status == "Disewa" || it.status == "Dipesan" }
                 val completed = transactions.filter { it.status == "Selesai" }
@@ -139,7 +142,8 @@ class RentalViewModel(
         viewModelScope.launch {
             try {
                 _availabilityState.value = null
-                val availableStock = rentalRepository.checkAvailability(itemId, unitUsahaId, startDate, endDate)
+                val availableStock =
+                    rentalRepository.checkAvailability(itemId, unitUsahaId, startDate, endDate)
                 _availabilityState.value = Result.success(availableStock)
             } catch (e: Exception) {
                 _availabilityState.value = Result.failure(e)
@@ -199,7 +203,13 @@ class RentalViewModel(
     ) = viewModelScope.launch {
         _saveState.value = RentalSaveState.LOADING
         try {
-            rentalRepository.processReturn(transaction, returnedConditions, damageCost, notes, remainingPayment)
+            rentalRepository.processReturn(
+                transaction,
+                returnedConditions,
+                damageCost,
+                notes,
+                remainingPayment
+            )
             _saveState.value = RentalSaveState.SUCCESS
         } catch (e: Exception) {
             _saveState.value = RentalSaveState.ERROR(e.message ?: "Gagal menyelesaikan transaksi.")
@@ -230,13 +240,26 @@ class RentalViewModel(
     }
 
     fun buildRentalReceiptText(transaction: RentalTransaction): String {
-        val unitUsahaName = activeUnitUsaha.value?.name ?: "BUMDesku"
+        val receiptWidth = 32 // Lebar struk untuk printer 58mm
+        val unitUsahaName = activeUnitUsaha.value?.name ?: "BUMDes Jangkang"
+
+        // Fungsi bantuan untuk membuat baris dengan teks kiri dan kanan
+        fun createRow(left: String, right: String): String {
+            val spaces = receiptWidth - left.length - right.length
+            return left + " ".repeat(kotlin.math.max(0, spaces)) + right
+        }
+
+        // Fungsi untuk memformat mata uang tanpa "Rp"
+        fun formatCurrencyValue(value: Double): String {
+            val format = NumberFormat.getNumberInstance(Locale("in", "ID"))
+            return format.format(value.toLong())
+        }
+
         val dateFormat = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault())
-        val currencyFormat = NumberFormat.getCurrencyInstance(Locale("in", "ID"))
+        val simpleDateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
 
         val builder = StringBuilder()
         val esc: Char = 27.toChar()
-        val gs: Char = 29.toChar()
         val initPrinter = byteArrayOf(esc.code.toByte(), 64)
         val alignCenter = byteArrayOf(esc.code.toByte(), 97, 1)
         val alignLeft = byteArrayOf(esc.code.toByte(), 97, 0)
@@ -246,23 +269,66 @@ class RentalViewModel(
         builder.append(String(initPrinter))
         builder.append(String(alignCenter))
         builder.append(String(boldOn))
-        builder.append("$unitUsahaName - Jasa Sewa\n")
+        builder.append("$unitUsahaName\n")
         builder.append(String(boldOff))
-        builder.append("--------------------------------\n")
+        builder.append("BUKTI SEWA\n\n")
+
         builder.append(String(alignLeft))
-        builder.append("Tgl: ${dateFormat.format(Date(transaction.returnDate ?: 0L))}\n")
-        builder.append("Penyewa: ${transaction.customerName}\n")
-        builder.append("--------------------------------\n")
-        builder.append("Barang: ${transaction.itemName}\n")
-        builder.append("Jumlah: ${transaction.quantity}\n")
-        builder.append("Sewa dari: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.rentalDate))}\n")
-        builder.append("Selesai pada: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(transaction.returnDate ?: 0L))}\n")
-        builder.append("--------------------------------\n")
-        builder.append("Total Biaya: ${currencyFormat.format(transaction.totalPrice)}\n")
-        if (transaction.notesOnReturn.isNotBlank()) {
-            builder.append("Catatan: ${transaction.notesOnReturn}\n")
+        val transactionId = transaction.id
+        builder.append(createRow("No:", transactionId.take(8).uppercase()))
+        builder.append("\n")
+        val receiptDate = transaction.returnDate ?: transaction.rentalDate
+        builder.append(createRow("Tgl:", simpleDateFormat.format(Date(receiptDate))))
+        builder.append("\n")
+        builder.append(createRow("Penyewa:", transaction.customerName))
+        builder.append("\n")
+
+        builder.append("-".repeat(receiptWidth)).append("\n")
+        builder.append("DETAIL SEWA\n")
+        builder.append(createRow("Barang:", transaction.itemName))
+        builder.append("\n")
+        builder.append(createRow("Jumlah:", transaction.quantity.toString()))
+        builder.append("\n")
+        builder.append(createRow("Harga/Hari:", formatCurrencyValue(transaction.pricePerDay)))
+        builder.append("\n\n")
+
+        val tglSewa = simpleDateFormat.format(Date(transaction.rentalDate))
+        val tglKembali = transaction.returnDate?.let { simpleDateFormat.format(Date(it)) } ?: "-"
+        builder.append(createRow("Tgl Sewa:", tglSewa))
+        builder.append("\n")
+        builder.append(createRow("Tgl Kembali:", tglKembali))
+        builder.append("\n")
+
+        builder.append("-".repeat(receiptWidth)).append("\n")
+
+        val isCompletedOrPaid = transaction.status == "Selesai" || transaction.paymentStatus == PaymentStatus.LUNAS
+
+        if (isCompletedOrPaid) {
+            builder.append(createRow("Total Dibayar:", formatCurrencyValue(transaction.downPayment)))
+            builder.append("\n")
+        } else {
+            builder.append(createRow("Total Biaya:", formatCurrencyValue(transaction.totalPrice)))
+            builder.append("\n")
+            builder.append(createRow("Uang Muka (DP):", formatCurrencyValue(transaction.downPayment)))
+            builder.append("\n")
+            val sisa = transaction.totalPrice - transaction.downPayment
+            if (sisa > 0.01) {
+                builder.append(createRow("Sisa Bayar:", formatCurrencyValue(sisa)))
+                builder.append("\n")
+            }
         }
-        builder.append("--------------------------------\n\n")
+
+        builder.append(String(boldOn))
+        builder.append(createRow("TOTAL BIAYA SEWA:", formatCurrencyValue(transaction.totalPrice)))
+        builder.append("\n")
+        builder.append(String(boldOff))
+
+        if (transaction.notesOnReturn.isNotBlank()) {
+            builder.append("-".repeat(receiptWidth)).append("\n")
+            builder.append("Catatan:\n${transaction.notesOnReturn}\n")
+        }
+
+        builder.append("\n\n")
         builder.append(String(alignCenter))
         builder.append("Terima kasih!\n\n\n\n")
 
